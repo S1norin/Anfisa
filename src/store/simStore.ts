@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { syncCameraStates } from '../domain/camera';
 import type { SimConfig } from '../domain/config';
 import { defaultConfig } from '../domain/config';
 import { Simulation } from '../simulation/sim';
@@ -15,15 +16,17 @@ export class SimStore {
   private simInstance = new Simulation(defaultConfig());
   private version = 0;
   private listeners = new Set<() => void>();
+  /**
+   * Cached snapshot — `useSyncExternalStore` compares snapshots with
+   * Object.is, so a fresh object per call would loop React forever.
+   */
+  private snapshot = { version: 0, sim: this.simInstance };
 
   get sim(): Simulation {
     return this.simInstance;
   }
 
-  getState = (): { version: number; sim: Simulation } => ({
-    version: this.version,
-    sim: this.sim,
-  });
+  getState = (): { version: number; sim: Simulation } => this.snapshot;
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -32,6 +35,7 @@ export class SimStore {
 
   private notify(): void {
     this.version += 1;
+    this.snapshot = { version: this.version, sim: this.sim };
     for (const l of this.listeners) l();
   }
 
@@ -68,6 +72,21 @@ export class SimStore {
 
   setSpeedFactor(f: 0.25 | 0.5 | 1 | 2): void {
     this.sim.setSpeedFactor(f);
+    this.notify();
+  }
+
+  /**
+   * Edit the live configuration (CAM-002, CFG-001). The caller is
+   * responsible for validation (NFR-007); camera states are re-synced so
+   * disabled rigs go OFFLINE and new rigs start IDLE.
+   */
+  updateConfig(mutator: (cfg: SimConfig) => SimConfig): void {
+    const next = mutator(this.sim.state.config);
+    this.sim.state.config = next;
+    this.sim.state.cameraStates = syncCameraStates(
+      next.cameraRigs,
+      this.sim.state.cameraStates,
+    );
     this.notify();
   }
 }

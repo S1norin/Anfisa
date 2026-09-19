@@ -1,7 +1,9 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
+import type { CameraState } from '../domain/types';
 import type { SimConfig } from '../domain/config';
 import { defaultConfig } from '../domain/config';
+import { CameraRigScene } from './cameraRig';
 import { StationScene } from './stationScene';
 
 function hasWebGL(): boolean {
@@ -20,7 +22,20 @@ function hasWebGL(): boolean {
  * Operations 3D canvas (issue #11 extends this with parcels, labels,
  * camera status, selection, and dimension overlays).
  */
-export function SceneCanvas({ config = defaultConfig() }: { config?: SimConfig }) {
+export interface SceneCanvasProps {
+  config?: SimConfig;
+  /** Runtime per-rig states (defaults to IDLE/OFFLINE by `enabled`). */
+  cameraStates?: Record<string, CameraState>;
+  selectedCameraId?: string | null;
+  onSelectCamera?: (id: string) => void;
+}
+
+export function SceneCanvas({
+  config = defaultConfig(),
+  cameraStates,
+  selectedCameraId = null,
+  onSelectCamera,
+}: SceneCanvasProps) {
   if (!hasWebGL()) {
     return (
       <div className="scene-canvas-fallback" data-testid="scene-canvas-fallback">
@@ -39,6 +54,17 @@ export function SceneCanvas({ config = defaultConfig() }: { config?: SimConfig }
       <ambientLight intensity={0.7} />
       <directionalLight position={[4, 6, 3]} intensity={1.1} />
       <StationScene config={config} />
+      <CameraRigScene
+        rigs={config.cameraRigs}
+        states={
+          cameraStates ??
+          Object.fromEntries(
+            config.cameraRigs.map((r) => [r.id, r.enabled ? 'IDLE' : 'OFFLINE']),
+          )
+        }
+        selectedId={selectedCameraId}
+        onSelect={onSelectCamera ?? (() => undefined)}
+      />
       <gridHelper args={[8, 40, '#2f3740', '#222831']} position={[0, -0.8, 1.1]} />
       <OrbitControls
         target={[0, 0.3, 1.1]}

@@ -1,7 +1,8 @@
 import type { SimConfig } from '../domain/config';
 import { defaultConfig } from '../domain/config';
+import { syncCameraStates } from '../domain/camera';
 import { createIdGenerator, createRng, type Rng } from '../domain/rng';
-import type { FinalizedParcel, ParcelState, SimEvent } from '../domain/types';
+import type { CameraState, FinalizedParcel, ParcelState, SimEvent } from '../domain/types';
 import { buildParcelSpec } from './spawner';
 
 /**
@@ -35,6 +36,11 @@ export interface SimState {
    * reproducible.
    */
   payloadHistory: string[];
+  /**
+   * Per-rig runtime state (CAM-004). Synced from cameraRigs on creation and
+   * on config edits; the acquisition scheduler (issue #6) drives transitions.
+   */
+  cameraStates: Record<string, CameraState>;
   /** Display-rate speed factor (0.25/0.5/1/2) — presentation only. */
   speedFactor: 0.25 | 0.5 | 1 | 2;
   /** Sim time of the next spawn (robust to any interval/step combination). */
@@ -59,6 +65,7 @@ export function createSimState(config: SimConfig = defaultConfig()): SimState {
     parcelIds: createIdGenerator('P'),
     labelIds: createIdGenerator('L'),
     payloadHistory: [],
+    cameraStates: syncCameraStates(config.cameraRigs, {}),
     speedFactor: 1,
     nextSpawnMs: config.parcel.spawnIntervalMs,
   };

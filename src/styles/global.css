@@ -135,6 +135,147 @@ body {
   }
 }
 
+.view-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.camera-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: calc(100vh - 130px);
+  overflow-y: auto;
+}
+
+.cam-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cam-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cam-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 0.9em;
+}
+
+.cam-item:hover {
+  color: var(--text);
+}
+
+.cam-item.selected {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(77, 163, 255, 0.08);
+}
+
+.cam-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cam-role {
+  font-size: 0.8em;
+  color: var(--text-dim);
+}
+
+.cam-state {
+  font-size: 0.8em;
+  font-family: ui-monospace, monospace;
+}
+
+.cam-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 10px;
+}
+
+.cam-detail h3 {
+  margin: 0;
+  font-size: 1em;
+  font-family: ui-monospace, monospace;
+}
+
+.cam-section {
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.cam-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.cam-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8em;
+  color: var(--text-dim);
+}
+
+.cam-field input,
+.cam-field select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font: inherit;
+}
+
+.cam-field input:focus-visible,
+.cam-field select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.cam-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.cam-error {
+  color: var(--err);
+  font-size: 0.85em;
+  border: 1px solid var(--err);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

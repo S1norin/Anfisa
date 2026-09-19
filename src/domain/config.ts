@@ -3,6 +3,7 @@
  * All user-editable values live here; presets (issue #14) mutate this object,
  * never hidden constants. JSON round-trippable (CFG-003).
  */
+import { defaultCameraRigs, validateCameraRigs } from './camera';
 import type { CameraConfig, MaterialPreset } from './types';
 
 export const CONFIG_VERSION = 1;
@@ -53,6 +54,11 @@ export interface SimConfig {
     sortDistanceMaxMm: number;
     bottomTransfer: 'SIDE_GRIP' | 'GAP';
   };
+  /**
+   * Per-camera rigs (CAM-001). The `cameras` block above holds shared
+   * defaults used when creating new rigs.
+   */
+  cameraRigs: CameraConfig[];
   cameras: {
     count: number;
     sensorWidthPx: number;
@@ -91,7 +97,7 @@ export interface SimConfig {
 }
 
 export function defaultConfig(): SimConfig {
-  return {
+  const cfg: SimConfig = {
     version: CONFIG_VERSION,
     seed: 2026,
     belt: {
@@ -150,7 +156,20 @@ export function defaultConfig(): SimConfig {
     },
     finalizeGraceMs: 250,
     frameBufferMaxPerCamera: 120,
+    cameraRigs: [],
   };
+  cfg.cameraRigs = defaultCameraRigs(
+    { lengthMm: cfg.station.lengthMm, beltWidthMm: cfg.belt.widthMm },
+    {
+      sensorWidthPx: cfg.cameras.sensorWidthPx,
+      sensorHeightPx: cfg.cameras.sensorHeightPx,
+      focalLengthMm: cfg.cameras.focalLengthMm,
+      exposureUs: cfg.cameras.exposureUs,
+      fps: cfg.cameras.fps,
+      shutter: cfg.cameras.shutter,
+    },
+  );
+  return cfg;
 }
 
 export type ConfigError = { path: string; message: string };
@@ -206,6 +225,8 @@ export function validateConfig(cfg: SimConfig): ConfigError[] {
   num(cfg.quality.blurPxMax, 'quality.blurPxMax', 0.05, 10);
   num(cfg.quality.incidenceDegMax, 'quality.incidenceDegMax', 10, 90);
   num(cfg.finalizeGraceMs, 'finalizeGraceMs', 0, 10000);
+
+  errors.push(...validateCameraRigs(cfg.cameraRigs));
 
   return errors;
 }
