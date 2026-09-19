@@ -43,6 +43,8 @@ export interface SimConfig {
     material: MaterialPreset;
     lateralOffsetMm: number;
     yawDeg: number;
+    /** Per-parcel probability of a glossy tape strip (PAR-001). */
+    tapeChance: number;
   };
   station: {
     lengthMm: number;
@@ -71,6 +73,12 @@ export interface SimConfig {
     /** `KTY-` + 14 ASCII digits. */
     payloadPrefix: string;
     payloadDigits: number;
+    /**
+     * Per-label probability of reusing a payload from an earlier label in the
+     * same run (PAR-005 repeated-payload case). Same payload, distinct
+     * labelInstanceId — dedup must key on the instance, not the payload.
+     */
+    duplicatePayloadChance: number;
   };
   /**
    * Editable quality-model thresholds (§8). Every value is a labelled
@@ -102,6 +110,7 @@ export function defaultConfig(): SimConfig {
       material: 'KRAFT',
       lateralOffsetMm: 0,
       yawDeg: 0,
+      tapeChance: 0.3,
     },
     station: {
       lengthMm: 2200,
@@ -127,6 +136,7 @@ export function defaultConfig(): SimConfig {
       xDimensionMm: 0.3,
       payloadPrefix: 'KTY-',
       payloadDigits: 14,
+      duplicatePayloadChance: 0.15,
     },
     quality: {
       coverageMin: 0.92,
@@ -177,6 +187,8 @@ export function validateConfig(cfg: SimConfig): ConfigError[] {
       message: 'must be >= 1 and <= labelCountMax',
     });
   }
+  num(cfg.parcel.tapeChance, 'parcel.tapeChance', 0, 1);
+  num(cfg.barcode.duplicatePayloadChance, 'barcode.duplicatePayloadChance', 0, 1);
   num(cfg.station.lengthMm, 'station.lengthMm', 500, 10000);
   num(cfg.station.sortDistanceMm, 'station.sortDistanceMm', 0, 3000);
   if (cfg.station.sortDistanceMm > cfg.station.sortDistanceMaxMm) {

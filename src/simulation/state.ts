@@ -1,7 +1,8 @@
 import type { SimConfig } from '../domain/config';
 import { defaultConfig } from '../domain/config';
 import { createIdGenerator, createRng, type Rng } from '../domain/rng';
-import type { FinalizedParcel, ParcelState, SimEvent, ParcelSpec } from '../domain/types';
+import type { FinalizedParcel, ParcelState, SimEvent } from '../domain/types';
+import { buildParcelSpec } from './spawner';
 
 /**
  * Deterministic simulation state (SIM-002).
@@ -28,6 +29,12 @@ export interface SimState {
   rng: Rng;
   parcelIds: () => string;
   labelIds: () => string;
+  /**
+   * Payloads of labels created so far in this run (PAR-005).
+   * Shared with the label generator so repeated payloads are legal and
+   * reproducible.
+   */
+  payloadHistory: string[];
   /** Display-rate speed factor (0.25/0.5/1/2) — presentation only. */
   speedFactor: 0.25 | 0.5 | 1 | 2;
   /** Sim time of the next spawn (robust to any interval/step combination). */
@@ -51,6 +58,7 @@ export function createSimState(config: SimConfig = defaultConfig()): SimState {
     rng: createRng(seed),
     parcelIds: createIdGenerator('P'),
     labelIds: createIdGenerator('L'),
+    payloadHistory: [],
     speedFactor: 1,
     nextSpawnMs: config.parcel.spawnIntervalMs,
   };
@@ -58,24 +66,6 @@ export function createSimState(config: SimConfig = defaultConfig()): SimState {
 
 export function sortPointZMm(state: SimState): number {
   return state.config.station.lengthMm + state.config.station.sortDistanceMm;
-}
-
-/**
- * Build a parcel spec. Label generation (PAR-002..PAR-007) lands in issue #4;
- * for now parcels carry no labels, keeping t2 tests focused on motion.
- */
-export function buildParcelSpec(state: SimState): ParcelSpec {
-  const p = state.config.parcel;
-  return {
-    widthMm: p.widthMm,
-    heightMm: p.heightMm,
-    lengthMm: p.lengthMm,
-    lateralOffsetMm: p.lateralOffsetMm,
-    yawDeg: p.yawDeg,
-    material: p.material,
-    tape: false,
-    labels: [],
-  };
 }
 
 /** Spawn a new parcel: its front face starts one length behind the entry. */
