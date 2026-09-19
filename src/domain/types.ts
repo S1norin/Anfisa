@@ -85,6 +85,20 @@ export interface CameraConfig {
     compression: number;
     /** Presentation only; excluded from metrics (IMG-003). */
     artifactAmplification: number;
+    /**
+     * Independent effect switches (IMG-012) for clean/physical/amplified
+     * comparison. They gate the VISIBLE degradation only; the analytic
+     * values the quality model reads are always computed.
+     */
+    toggles: {
+      motionBlur: boolean;
+      focus: boolean;
+      noise: boolean;
+      exposure: boolean;
+      glare: boolean;
+      compression: boolean;
+      lens: boolean;
+    };
   };
   preview: { widthPx: number; heightPx: number; overlay: boolean };
   enabled: boolean;
@@ -145,6 +159,12 @@ export interface LabelInstance {
   rotationDeg: number;
   widthMm: number;
   heightMm: number;
+  /**
+   * Print damage 0..1 (PAR-007, IMG-010): 0 = clean; >0 bakes seeded
+   * scuffs/creases into the label texture AND feeds the quality model's
+   * damage component (issue #8).
+   */
+  damage: number;
 }
 
 export interface ParcelSpec {

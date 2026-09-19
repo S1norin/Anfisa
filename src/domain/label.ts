@@ -13,8 +13,11 @@
  *  - PAR-005: `labelInstanceId` is the identity of a physical label; the
  *    `payload` is what it encodes. Repeated payloads (config
  *    `duplicatePayloadChance`) are legitimate and stay separate instances.
+ *  - PAR-007: each label rolls a print-damage value (IMG-010) from the
+ *    same rng stream — mostly clean, occasionally scuffed.
  */
 
+import { labelDamageValue } from './labelDamage';
 import type { SimConfig } from './config';
 import { degToRad } from './units';
 import type { Rng } from './rng';
@@ -133,14 +136,16 @@ export function generateLabels(ctx: LabelGenContext): LabelInstance[] {
       rng,
     );
 
+    const labelInstanceId = nextLabelId();
     labels.push({
-      labelInstanceId: nextLabelId(),
+      labelInstanceId,
       payload,
       face,
       localOffsetMm: placement.localOffsetMm,
       rotationDeg: placement.rotationDeg,
       widthMm: cfg.barcode.labelWidthMm,
       heightMm: cfg.barcode.labelHeightMm,
+      damage: labelDamageValue(rng),
     });
   }
 

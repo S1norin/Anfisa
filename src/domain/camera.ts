@@ -154,6 +154,19 @@ export interface StationGeometry {
 
 const STATION_CENTER_Z = (len: number) => len / 2;
 
+/** All effects on (IMG-012); presets flip individual switches. */
+export function defaultEffectToggles(): CameraConfig['imageEffects']['toggles'] {
+  return {
+    motionBlur: true,
+    focus: true,
+    noise: true,
+    exposure: true,
+    glare: true,
+    compression: true,
+    lens: true,
+  };
+}
+
 /**
  * The six default readers. Positions are demo assumptions chosen so every
  * role views the middle of the belt; not an engineered layout.
@@ -176,7 +189,9 @@ export function defaultCameraRigs(
     { role: 'LEFT', eye: [-1200, 900, cz], target: [0, 0, cz] },
     { role: 'RIGHT', eye: [1200, 900, cz], target: [0, 0, cz] },
     { role: 'TOP', eye: [0, 2000, cz], target: [0, 0, cz] },
-    { role: 'BOTTOM', eye: [0, 250, cz], target: [0, 150, cz] },
+    // Bottom reader sits UNDER the belt (the station has a bottom opening
+    // for side-grip transfer) and looks UP at the parcel bottom face (y=0).
+    { role: 'BOTTOM', eye: [0, -400, cz], target: [0, 0, cz] },
   ];
 
   return poses.map((p, i) => ({
@@ -221,6 +236,7 @@ export function defaultCameraRigs(
       readNoise: 0.05,
       compression: 0,
       artifactAmplification: 1,
+      toggles: defaultEffectToggles(),
     },
     preview: { widthPx: 960, heightPx: 540, overlay: true },
     enabled: true,
@@ -509,6 +525,34 @@ export function validateCameraRigs(rigs: CameraConfig[]): ConfigError[] {
 
     num(r.preview.widthPx, p('preview.widthPx'), 16, 4096);
     num(r.preview.heightPx, p('preview.heightPx'), 16, 4096);
+
+    num(r.imageEffects.temporalSamples, p('imageEffects.temporalSamples'), 2, 32);
+    num(r.imageEffects.shotNoise, p('imageEffects.shotNoise'), 0, 1);
+    num(r.imageEffects.readNoise, p('imageEffects.readNoise'), 0, 1);
+    num(r.imageEffects.compression, p('imageEffects.compression'), 0, 1);
+    num(
+      r.imageEffects.artifactAmplification,
+      p('imageEffects.artifactAmplification'),
+      1,
+      16,
+    );
+    const toggles = r.imageEffects.toggles;
+    for (const key of [
+      'motionBlur',
+      'focus',
+      'noise',
+      'exposure',
+      'glare',
+      'compression',
+      'lens',
+    ] as const) {
+      if (typeof toggles?.[key] !== 'boolean') {
+        errors.push({
+          path: p(`imageEffects.toggles.${key}`),
+          message: 'must be a boolean',
+        });
+      }
+    }
 
     const pos = r.pose.positionMm;
     for (const [k, v] of pos.entries()) {

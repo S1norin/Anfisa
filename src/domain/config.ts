@@ -3,7 +3,7 @@
  * All user-editable values live here; presets (issue #14) mutate this object,
  * never hidden constants. JSON round-trippable (CFG-003).
  */
-import { defaultCameraRigs, validateCameraRigs } from './camera';
+import { defaultCameraRigs, defaultEffectToggles, validateCameraRigs } from './camera';
 import type { CameraConfig, MaterialPreset } from './types';
 
 export const CONFIG_VERSION = 1;
@@ -277,6 +277,7 @@ export function industrialReaderCameraPreset(
       readNoise: 0.05,
       compression: 0,
       artifactAmplification: 1,
+      toggles: defaultEffectToggles(),
     },
     preview: { widthPx: 960, heightPx: 540, overlay: true },
     enabled: true,

@@ -16,12 +16,17 @@
 import * as bwipjs from 'bwip-js/browser';
 import type * as BwipJs from 'bwip-js/browser';
 import * as THREE from 'three';
+import { bakeLabelDamage } from './labelDamage';
 
 export interface LabelTextureOptions {
   /** Pixels per module (default 4 → ~800 px wide for a 15-char payload). */
   scale?: number;
   /** Quiet zone in modules per side (default 10, the Code 128 spec). */
   quietZoneModules?: number;
+  /** Print damage 0..1 (IMG-010): bakes seeded scuffs/creases after render. */
+  damage?: number;
+  /** Seed for the damage bake (use `labelSeedFor(labelInstanceId)`). */
+  damageSeed?: number;
 }
 
 /**
@@ -52,6 +57,9 @@ export function renderCode128Canvas(
 ): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   bwipjs.toCanvas(canvas, code128Options(payload, opts));
+  if (opts.damage && opts.damage > 0) {
+    bakeLabelDamage(canvas, opts.damage, opts.damageSeed ?? 1);
+  }
   return canvas;
 }
 

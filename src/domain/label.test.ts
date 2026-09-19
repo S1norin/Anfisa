@@ -74,6 +74,7 @@ describe('randomLabelPlacement (PAR-004)', () => {
         rotationDeg: placement.rotationDeg,
         widthMm: cfg.barcode.labelWidthMm,
         heightMm: cfg.barcode.labelHeightMm,
+        damage: 0,
       };
       expect(labelFitsFace(label, spec)).toBe(true);
     }
@@ -98,6 +99,7 @@ describe('randomLabelPlacement (PAR-004)', () => {
         rotationDeg: placement.rotationDeg,
         widthMm: 100,
         heightMm: 50,
+        damage: 0,
       };
       expect(labelFitsFace(label, spec)).toBe(true);
     }

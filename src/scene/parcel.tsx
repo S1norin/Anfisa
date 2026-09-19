@@ -18,6 +18,7 @@ import { degToRad, mmToM } from '../domain/units';
 import type { ParcelState } from '../domain/types';
 import { buildLabelMesh } from './label';
 import { createLabelTexture } from './labelTexture';
+import { labelSeedFor } from './labelDamage';
 import { createMaterial, TAPE_PRESET } from './materials';
 
 const TAPE_THICKNESS_MM = 50;
@@ -69,7 +70,10 @@ export function ParcelScene({ state }: { state: ParcelState }) {
 
     const textures: THREE.Texture[] = [];
     for (const label of spec.labels) {
-      const texture = createLabelTexture(label.payload);
+      const texture = createLabelTexture(label.payload, {
+        damage: label.damage,
+        damageSeed: labelSeedFor(label.labelInstanceId),
+      });
       textures.push(texture);
       g.add(buildLabelMesh(label, spec, texture));
     }

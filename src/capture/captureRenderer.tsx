@@ -1,23 +1,29 @@
 import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { frameBuffer } from './frameBuffer';
-import { RenderTargetPool } from './renderTargets';
+import { PingPongPool } from './pingpong';
+import { ArtifactPass } from './artifactPass';
+import { frameArtifacts } from './imageFormation';
+import type { PreviewMode } from './imageFormation';
 import { cameraRigToPerspective } from '../scene/cameraRig';
 import { useSim } from '../store/simStore';
 import type { FrameObservation } from '../domain/types';
 
 /**
- * App-wide capture targets (CAM-006, NFR-003): one preview-size target per
- * capturing camera, reused across frames, disposed on camera removal and on
- * unmount.
+ * App-wide capture targets (CAM-006, NFR-003): a ping-pong PAIR of
+ * preview-size targets per capturing camera, reused across frames,
+ * disposed on camera removal and on unmount.
  */
-const pool = new RenderTargetPool();
+const pool = new PingPongPool();
+const pass = new ArtifactPass();
 
 /**
- * Capture renderer (CAM-006, CAM-007, issue #6): consumes CAMERA_CAPTURED
- * domain events and renders the live scene from each capturing camera into
- * a pooled preview target, then pushes full FrameObservation metadata into
- * the bounded frame buffer.
+ * Capture renderer (CAM-006, CAM-007, issue #6, IMG-005..IMG-012):
+ * consumes CAMERA_CAPTURED domain events, renders the live scene from each
+ * capturing camera into a clean preview target, degrades it with the
+ * artifact pass (visual side of the image-formation model), then pushes
+ * full FrameObservation metadata + the degraded texture into the bounded
+ * frame buffer.
  *
  * Runs inside <Canvas> so it has the r3f renderer; returns null.
  */
@@ -47,16 +53,40 @@ export function CaptureRenderer() {
       const rig = state.config.cameraRigs.find((r) => r.id === ev.cameraId);
       if (!rig) continue;
 
-      const rt = pool.acquire(
+      const { src, dst } = pool.acquire(
         rig.id,
         rig.preview.widthPx,
         rig.preview.heightPx,
       );
       const cam = cameraRigToPerspective(rig);
+      gl.setRenderTarget(src);
+      gl.clear();
       gl.render(scene, cam);
 
+      const candidates = ev.candidateParcelIds
+        .map((id) => state.parcels.get(id))
+        .filter((p): p is NonNullable<typeof p> => p != null);
+
+      const frameId = `f-${rig.id}-${ev.simTimeMs}`;
+      const artifacts = frameArtifacts(
+        rig,
+        candidates,
+        state.config.belt.speedMmPerSec,
+        frameId,
+        previewMode.current,
+      );
+
+      pass.setParams(
+        artifacts.visual,
+        rig.preview.widthPx,
+        rig.preview.heightPx,
+        ev.simTimeMs / 1000,
+      );
+      pass.render(gl, src, dst);
+      gl.setRenderTarget(null);
+
       const frame: FrameObservation = {
-        frameId: `f-${rig.id}-${ev.simTimeMs}`,
+        frameId,
         runId: state.runId,
         cameraId: rig.id,
         cameraState: state.cameraStates[rig.id] ?? 'CAPTURING',
@@ -73,7 +103,7 @@ export function CaptureRenderer() {
         labels: [],
         processingMode: 'GEOMETRY_MODEL',
       };
-      frameBuffer.push(frame, rt);
+      frameBuffer.push(frame, dst);
     }
   });
 
@@ -89,8 +119,18 @@ export function CaptureRenderer() {
   });
 
   useEffect(() => {
-    return () => pool.dispose();
+    return () => {
+      pool.dispose();
+      pass.dispose();
+    };
   }, []);
 
   return null;
+}
+
+// Shared preview mode, mutable by the operations UI (IMG-012) without
+// re-mounting the canvas: setPreviewMode() / getPreviewMode().
+export const previewMode: { current: PreviewMode } = { current: 'PHYSICAL' };
+export function setPreviewMode(m: PreviewMode): void {
+  previewMode.current = m;
 }

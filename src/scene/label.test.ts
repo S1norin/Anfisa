@@ -70,6 +70,7 @@ describe('label geometry (PAR-004)', () => {
     rotationDeg: 0,
     widthMm: 78,
     heightMm: 25,
+    damage: 0,
     ...over,
   });
 
