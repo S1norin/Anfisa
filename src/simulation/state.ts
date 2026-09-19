@@ -41,6 +41,8 @@ export interface SimState {
    * on config edits; the acquisition scheduler (issue #6) drives transitions.
    */
   cameraStates: Record<string, CameraState>;
+  /** Last capture sim time per camera (CAM-005 fps scheduling). */
+  captureLastMs: Record<string, number>;
   /** Display-rate speed factor (0.25/0.5/1/2) — presentation only. */
   speedFactor: 0.25 | 0.5 | 1 | 2;
   /** Sim time of the next spawn (robust to any interval/step combination). */
@@ -66,6 +68,7 @@ export function createSimState(config: SimConfig = defaultConfig()): SimState {
     labelIds: createIdGenerator('L'),
     payloadHistory: [],
     cameraStates: syncCameraStates(config.cameraRigs, {}),
+    captureLastMs: {},
     speedFactor: 1,
     nextSpawnMs: config.parcel.spawnIntervalMs,
   };

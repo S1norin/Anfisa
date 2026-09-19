@@ -1,3 +1,4 @@
+import { scheduleCaptures } from '../capture/scheduler';
 import type { SimConfig } from '../domain/config';
 import type { ParcelState } from '../domain/types';
 import { FIXED_STEP_MS, type SimState, createSimState, spawnParcel } from './state';
@@ -69,6 +70,26 @@ export class Simulation {
     if (s.simTimeMs >= s.nextSpawnMs) {
       spawnParcel(s, s.simTimeMs);
       s.nextSpawnMs += s.config.parcel.spawnIntervalMs;
+    }
+
+    // 4. Capture scheduling (CAM-005): runs after motion so parcel centres
+    //    are current. Pure — see capture/scheduler.ts.
+    const scheduled = scheduleCaptures({
+      rigs: s.config.cameraRigs,
+      states: s.cameraStates,
+      parcels: s.parcels.values(),
+      simTimeMs: s.simTimeMs,
+      lastCaptureMs: s.captureLastMs,
+    });
+    s.cameraStates = scheduled.states;
+    s.captureLastMs = scheduled.lastCaptureMs;
+    for (const c of scheduled.captures) {
+      s.events.push({
+        type: 'CAMERA_CAPTURED',
+        cameraId: c.cameraId,
+        simTimeMs: c.simTimeMs,
+        candidateParcelIds: c.candidateParcelIds,
+      });
     }
   }
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SceneCanvas } from '../../scene/sceneCanvas';
 import { simStore, useSim } from '../../store/simStore';
 import { CameraEditor } from '../cameraEditor';
+import { CameraWall } from '../cameraWall';
 
 export function OperationsView() {
   const sim = useSim();
@@ -10,13 +11,16 @@ export function OperationsView() {
 
   return (
     <section className="view view-operations" data-testid="operations-view">
-      <div className="view-canvas">
-        <SceneCanvas
-          config={config}
-          cameraStates={cameraStates}
-          selectedCameraId={selectedCameraId}
-          onSelectCamera={setSelectedCameraId}
-        />
+      <div className="view-canvas-col">
+        <div className="view-canvas">
+          <SceneCanvas
+            config={config}
+            cameraStates={cameraStates}
+            selectedCameraId={selectedCameraId}
+            onSelectCamera={setSelectedCameraId}
+          />
+        </div>
+        <CameraWall />
       </div>
       <div className="view-panel">
         <h2>Operations</h2>

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { syncCameraStates } from '../domain/camera';
+import { nextCameraState, syncCameraStates } from '../domain/camera';
 import type { SimConfig } from '../domain/config';
 import { defaultConfig } from '../domain/config';
 import { Simulation } from '../simulation/sim';
@@ -39,10 +39,15 @@ export class SimStore {
     for (const l of this.listeners) l();
   }
 
-  /** Advance from the display loop, then tick React. */
+  /**
+   * Advance from the display loop, then tick React — but only when the
+   * sim clock actually moved (a paused/idle store re-rendering 60x/s for
+   * nothing is pure waste).
+   */
   tick(realElapsedMs: number): void {
+    const before = this.sim.state.simTimeMs;
     this.sim.pump(realElapsedMs);
-    this.notify();
+    if (this.sim.state.simTimeMs !== before) this.notify();
   }
 
   start(): void {
@@ -87,6 +92,27 @@ export class SimStore {
       next.cameraRigs,
       this.sim.state.cameraStates,
     );
+    // Keep the fps-scheduling history aligned with the rig list.
+    const kept: Record<string, number> = {};
+    for (const rig of next.cameraRigs) {
+      const t = this.sim.state.captureLastMs[rig.id];
+      if (t !== undefined) kept[rig.id] = t;
+    }
+    this.sim.state.captureLastMs = kept;
+    this.notify();
+  }
+
+  /**
+   * Raise / clear a camera fault (CAM-009): flows through the CAM-004
+   * state machine, so captures stop (FAULT rigs never schedule) and the
+   * feed wall warns; clearing returns the rig to IDLE.
+   */
+  setCameraFault(id: string, faulted: boolean): void {
+    const s = this.sim.state;
+    const prev = s.cameraStates[id] ?? 'IDLE';
+    s.cameraStates[id] = nextCameraState(prev, {
+      type: faulted ? 'FAULT_RAISED' : 'FAULT_CLEARED',
+    });
     this.notify();
   }
 }

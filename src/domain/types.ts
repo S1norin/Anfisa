@@ -192,4 +192,10 @@ export type SimEvent =
       simTimeMs: number;
       fromMmPerSec: number;
       toMmPerSec: number;
+    }
+  | {
+      type: 'CAMERA_CAPTURED';
+      cameraId: string;
+      simTimeMs: number;
+      candidateParcelIds: string[];
     };

@@ -5,6 +5,7 @@ import type { SimConfig } from '../domain/config';
 import { defaultConfig } from '../domain/config';
 import { CameraRigScene } from './cameraRig';
 import { StationScene } from './stationScene';
+import { CaptureRenderer } from '../capture/captureRenderer';
 
 function hasWebGL(): boolean {
   try {
@@ -51,6 +52,7 @@ export function SceneCanvas({
       camera={{ position: [2.4, 1.6, 3.4], fov: 45, near: 0.05, far: 100 }}
     >
       <color attach="background" args={['#161a20']} />
+      <CaptureRenderer />
       <ambientLight intensity={0.7} />
       <directionalLight position={[4, 6, 3]} intensity={1.1} />
       <StationScene config={config} />

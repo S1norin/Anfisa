@@ -88,12 +88,21 @@ body {
   min-height: calc(100vh - 50px);
 }
 
+.view-canvas-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
 .view-canvas {
   position: relative;
-  min-height: 400px;
+  height: 52vh;
+  min-height: 320px;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   overflow: hidden;
+  background: #0d1013;
 }
 
 .scene-canvas {
@@ -274,6 +283,99 @@ body {
   border: 1px solid var(--err);
   border-radius: 6px;
   padding: 6px 8px;
+}
+
+.camera-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 10px;
+}
+
+.cam-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.cam-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cam-tile-id {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+.cam-tile-state {
+  font-size: 0.75em;
+  font-family: ui-monospace, monospace;
+  padding: 1px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+}
+
+.state-IDLE {
+  color: var(--text-dim);
+}
+
+.state-ARMED {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.state-CAPTURING,
+.state-PROCESSING {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.state-FAULT,
+.state-OFFLINE {
+  color: var(--err);
+  border-color: var(--err);
+}
+
+.cam-tile-fault {
+  margin-left: auto;
+  font-size: 0.75em;
+  padding: 2px 9px;
+}
+
+.cam-tile-data {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 0.6fr;
+  gap: 4px;
+  font-size: 0.85em;
+}
+
+.cam-tile-data dt {
+  color: var(--text-dim);
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cam-tile-data dd {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cam-tile-warn {
+  margin: 0;
+  color: var(--err);
+  font-size: 0.8em;
+  font-family: ui-monospace, monospace;
 }
 
 @media (prefers-reduced-motion: reduce) {
