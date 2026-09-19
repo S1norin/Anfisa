@@ -6,7 +6,7 @@
 import { defaultCameraRigs, defaultEffectToggles, validateCameraRigs } from './camera';
 import type { CameraConfig, MaterialPreset } from './types';
 
-export const CONFIG_VERSION = 1;
+export const CONFIG_VERSION = 2;
 
 export interface QualityThresholds {
   /** Hard gate: minimum full-label coverage fraction. */
@@ -20,6 +20,17 @@ export interface QualityThresholds {
   /** Hard gate / target incidence angle in degrees. */
   incidenceDegMax: number;
   incidenceDegTarget: number;
+  /** Circle of confusion (px): full score at/below target, zero at max. */
+  focusPxTarget: number;
+  focusPxMax: number;
+  /** Contrast proxy: full score at/above min, zero at floor. */
+  contrastMin: number;
+  contrastFloor: number;
+  /** Glare index: full score at/below min, zero at max. */
+  glareMin: number;
+  glareMax: number;
+  /** Print damage 0..1: score = 1 - damage (no band). */
+  damageMax: number;
   /** Seeded probability band around the quality boundary (0..1). */
   boundaryBand: number;
 }
@@ -93,6 +104,8 @@ export interface SimConfig {
   quality: QualityThresholds;
   /** Grace period after the exit event before finalization (PIPE-009). */
   finalizeGraceMs: number;
+  /** Simulated PLC round trip between finalize and ACK (PIPE-006). */
+  ackLatencyMs: number;
   frameBufferMaxPerCamera: number;
 }
 
@@ -152,9 +165,17 @@ export function defaultConfig(): SimConfig {
       blurPxTarget: 0.5,
       incidenceDegMax: 60,
       incidenceDegTarget: 35,
+      focusPxTarget: 0.5,
+      focusPxMax: 2.0,
+      contrastMin: 0.5,
+      contrastFloor: 0.25,
+      glareMin: 0.2,
+      glareMax: 0.6,
+      damageMax: 0.65,
       boundaryBand: 0.15,
     },
     finalizeGraceMs: 250,
+    ackLatencyMs: 50,
     frameBufferMaxPerCamera: 120,
     cameraRigs: [],
   };
@@ -224,7 +245,25 @@ export function validateConfig(cfg: SimConfig): ConfigError[] {
   num(cfg.quality.ppmMin, 'quality.ppmMin', 0.5, 10);
   num(cfg.quality.blurPxMax, 'quality.blurPxMax', 0.05, 10);
   num(cfg.quality.incidenceDegMax, 'quality.incidenceDegMax', 10, 90);
+  num(cfg.quality.focusPxTarget, 'quality.focusPxTarget', 0.05, 5);
+  num(cfg.quality.focusPxMax, 'quality.focusPxMax', 0.1, 20);
+  if (cfg.quality.focusPxMax <= cfg.quality.focusPxTarget) {
+    errors.push({ path: 'quality.focusPxMax', message: 'must exceed focusPxTarget' });
+  }
+  num(cfg.quality.contrastMin, 'quality.contrastMin', 0.05, 1);
+  num(cfg.quality.contrastFloor, 'quality.contrastFloor', 0, 1);
+  if (cfg.quality.contrastFloor >= cfg.quality.contrastMin) {
+    errors.push({ path: 'quality.contrastFloor', message: 'must be below contrastMin' });
+  }
+  num(cfg.quality.glareMin, 'quality.glareMin', 0, 1);
+  num(cfg.quality.glareMax, 'quality.glareMax', 0.01, 1);
+  if (cfg.quality.glareMax <= cfg.quality.glareMin) {
+    errors.push({ path: 'quality.glareMax', message: 'must exceed glareMin' });
+  }
+  num(cfg.quality.damageMax, 'quality.damageMax', 0.1, 1);
+  num(cfg.quality.boundaryBand, 'quality.boundaryBand', 0, 0.9);
   num(cfg.finalizeGraceMs, 'finalizeGraceMs', 0, 10000);
+  num(cfg.ackLatencyMs, 'ackLatencyMs', 0, 10000);
 
   errors.push(...validateCameraRigs(cfg.cameraRigs));
 

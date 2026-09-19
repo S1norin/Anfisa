@@ -1,12 +1,14 @@
 import {
   effectiveExposureS,
+  labelMotionBlurPx,
   motionBlurPx,
   motionBlurVisual,
   parcelMotionBlurPx,
   travelDirectionImageSpace,
 } from './blur';
-import { defaultCameraRigs, sensorIntrinsics } from '../domain/camera';
+import { defaultCameraRigs, sensorIntrinsics, toCameraSpace } from '../domain/camera';
 import type { CameraConfig, ParcelState } from '../domain/types';
+import { labelCornersWorldMm } from './projection';
 
 const STATION = { lengthMm: 2200, beltWidthMm: 650 };
 const CAMS = {
@@ -168,5 +170,113 @@ describe('motionBlurVisual (IMG-002, IMG-003)', () => {
     expect(parcelMotionBlurPx(rig, P(), 1000)).toBeCloseTo(
       (fx * 1000 * 30075e-6) / 1800, 6,
     );
+  });
+});
+
+describe('labelMotionBlurPx (PIPE-003, §8.1 corner-based)', () => {
+  const F = () => rigs()[0]; // FRONT rig: eye [0,1200,-900] → [0,0,600]
+  const L = () => rigs()[2]; // LEFT rig: eye [-1200,900,1100] → [0,0,1100]
+  // Parcel spans z 500..1100 (centre 800).
+  const P = () => parcel(1100);
+
+  function rearLabel(): import('../domain/types').LabelInstance {
+    return {
+      labelInstanceId: 'L-1',
+      payload: 'KTY-00000000000000',
+      face: 'REAR',
+      localOffsetMm: [0, 200],
+      rotationDeg: 0,
+      widthMm: 300,
+      heightMm: 80,
+      damage: 0,
+    };
+  }
+  function leftLabel(): import('../domain/types').LabelInstance {
+    return {
+      labelInstanceId: 'L-2',
+      payload: 'KTY-11111111111111',
+      face: 'LEFT',
+      localOffsetMm: [0, 200],
+      rotationDeg: 0,
+      widthMm: 300, // along z
+      heightMm: 80,
+      damage: 0,
+    };
+  }
+
+  it('zero speed (or zero exposure) gives zero blur', () => {
+    expect(labelMotionBlurPx(F(), rearLabel(), P(), 0)).toBe(0);
+    const noExp = { ...F(), acquisition: { ...F().acquisition, exposureUs: 0 } };
+    expect(labelMotionBlurPx(noExp, rearLabel(), P(), 1000)).toBe(0);
+  });
+
+  /** Independent reference: per-corner image displacement, shutter open→closed. */
+  function cornerDisps(
+    r: CameraConfig,
+    label: import('../domain/types').LabelInstance,
+    p: ParcelState,
+    speed: number,
+  ): number[] {
+    const t = effectiveExposureS(r);
+    const closed = { ...p, frontZMm: p.frontZMm + speed * t };
+    const intr = sensorIntrinsics(r.sensor);
+    const a = labelCornersWorldMm(label, p);
+    const b = labelCornersWorldMm(label, closed);
+    return a.map((pa, i) => {
+      const ca = toCameraSpace(pa, r);
+      const cb = toCameraSpace(b[i], r);
+      if (ca[2] <= 0 || cb[2] <= 0) return 0;
+      const x0 = intr.fx * (ca[0] / ca[2]) + intr.cx;
+      const y0 = intr.cy - intr.fy * (ca[1] / ca[2]);
+      const x1 = intr.fx * (cb[0] / cb[2]) + intr.cx;
+      const y1 = intr.cy - intr.fy * (cb[1] / cb[2]);
+      return Math.hypot(x1 - x0, y1 - y0);
+    });
+  }
+
+  it('equals the MAX of the four corner displacements (§8.1)', () => {
+    const got = labelMotionBlurPx(F(), rearLabel(), P(), 1000);
+    const max = Math.max(...cornerDisps(F(), rearLabel(), P(), 1000));
+    expect(got).toBeCloseTo(max, 8);
+  });
+
+  it('oblique rig: motion along the view axis yields LESS image displacement than fx·v·t/z', () => {
+    const fx = sensorIntrinsics(F().sensor).fx;
+    const cam = toCameraSpace([0, 200, 500], F());
+    const naive = (fx * 1000 * 75e-6) / cam[2]; // assumes v ⊥ view axis
+    const got = labelMotionBlurPx(F(), rearLabel(), P(), 1000);
+    // FRONT rig views travel at ~53°: only the ⊥ component (≈0.62·v) sweeps the image.
+    expect(got).toBeLessThan(naive);
+    expect(got).toBeGreaterThan(naive * 0.3);
+  });
+
+  it('side rig (view ⊥ travel): exact pinhole fx·v·t/z at the nearest corner', () => {
+    const fx = sensorIntrinsics(L().sensor).fx;
+    const got = labelMotionBlurPx(L(), leftLabel(), P(), 1000);
+    const disps = cornerDisps(L(), leftLabel(), P(), 1000);
+    expect(Math.max(...disps)).toBeCloseTo(got, 8);
+    // Motion is purely across the image plane → exact pinhole at the nearest corner:
+    const corners = labelCornersWorldMm(leftLabel(), P());
+    const nearest = Math.min(...corners.map((c) => toCameraSpace(c, L())[2]));
+    expect(got).toBeCloseTo((fx * 1000 * 75e-6) / nearest, 6);
+  });
+
+  it('rolling shutter extends the integration window (IMG-004)', () => {
+    const global = labelMotionBlurPx(F(), rearLabel(), P(), 1000);
+    const rolling = {
+      ...F(),
+      acquisition: { ...F().acquisition, shutter: 'ROLLING' as const, rollingReadoutUs: 30000 },
+    };
+    // Effective window 75 µs + 30 ms readout = 401× the global window.
+    const rolled = labelMotionBlurPx(rolling, rearLabel(), P(), 1000);
+    expect(rolled).toBeGreaterThan(global);
+    expect(rolled).toBeGreaterThan(global * 401 * 0.98);
+    expect(rolled).toBeLessThan(global * 401 * 1.02);
+  });
+
+  it('all corners behind the camera → 0 (out of FOV)', () => {
+    // Parcel entirely behind the FRONT rig (camera looks toward +z).
+    const behind = parcel(-1500);
+    expect(labelMotionBlurPx(F(), rearLabel(), behind, 1000)).toBe(0);
   });
 });

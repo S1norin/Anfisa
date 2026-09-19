@@ -40,6 +40,50 @@ export type ParcelResultStatus =
 
 export type ProcessingMode = 'GEOMETRY_MODEL' | 'PIXEL_DECODER';
 
+/** Why an association failed (PIPE-008). */
+export type AssociationMismatch =
+  | 'PARCEL_UNKNOWN'
+  | 'GHOST_INSTANCE'
+  | 'POSITION_OUT_OF_WINDOW'
+  | 'TIME_OUT_OF_WINDOW';
+
+/** Per physical-label-instance result (audit-facing: ground truth allowed). */
+export interface LabelResult {
+  labelInstanceId: string;
+  face: Face;
+  /** Ground-truth payload of the instance. */
+  payload: string;
+  /** Value returned by the last validated decode (undefined if never decoded). */
+  decodedPayload?: string;
+  decoded: boolean;
+  bestConfidence: number;
+  /** All observations of this instance across frames/cameras (MET-005). */
+  observationCount: number;
+  decodedCount: number;
+  cameras: string[];
+  /** Union of reason codes seen on the best observations. */
+  reasons: string[];
+}
+
+/** Final per-parcel result after finalize (PIPE-009). */
+export interface ParcelResult {
+  parcelId: string;
+  status: ParcelResultStatus;
+  expectedLabels: number;
+  decodedLabels: number;
+  uniquePayloads: number;
+  /** Decoded payload values, duplicates preserved (legitimate repeats). */
+  payloads: string[];
+  labelResults: LabelResult[];
+  entrySimTimeMs: number;
+  exitSimTimeMs: number;
+  finalizedSimTimeMs: number;
+  /** Set when the simulated PLC ACK arrives (PIPE-006 tail). */
+  ackSimTimeMs?: number;
+  entryToResultMs: number;
+  exitToResultMs: number;
+}
+
 export interface CameraConfig {
   id: string;
   name: string;
@@ -218,4 +262,15 @@ export type SimEvent =
       cameraId: string;
       simTimeMs: number;
       candidateParcelIds: string[];
+    }
+  | {
+      type: 'PARCEL_FINALIZED';
+      parcelId: string;
+      simTimeMs: number;
+      status: ParcelResultStatus;
+    }
+  | {
+      type: 'PARCEL_ACKED';
+      parcelId: string;
+      simTimeMs: number;
     };

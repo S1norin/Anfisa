@@ -17,7 +17,8 @@ import {
   sensorIntrinsics,
   toCameraSpace,
 } from '../domain/camera';
-import type { CameraConfig, ParcelState } from '../domain/types';
+import type { CameraConfig, LabelInstance, ParcelState } from '../domain/types';
+import { labelCornersWorldMm } from './projection';
 
 export interface BlurInput {
   /** Camera-space distance to the point, mm (> 0). */
@@ -73,6 +74,45 @@ export function parcelMotionBlurPx(
     exposureS: effectiveExposureS(rig),
     focalPx: intr.fx,
   });
+}
+
+/**
+ * Per-label motion blur, corner-based (PIPE-003, §8.1): project the four
+ * label corners at shutter-open and at shutter-close (the parcel has
+ * travelled `speed · exposure` along world +Z), then take the MAXIMUM
+ * corner displacement in sensor pixels. This naturally accounts for
+ * camera pose, perspective, label face and motion direction — no constant
+ * pixels/mm assumption.
+ *
+ * Corners that are behind the camera at either instant are skipped (the
+ * label is out of FOV; the quality model gates on coverage anyway).
+ */
+export function labelMotionBlurPx(
+  rig: CameraConfig,
+  label: LabelInstance,
+  parcel: ParcelState,
+  speedMmPerSec: number,
+): number {
+  const exposureS = effectiveExposureS(rig);
+  if (speedMmPerSec <= 0 || exposureS <= 0) return 0;
+  const shiftMm = speedMmPerSec * exposureS;
+  const closed: ParcelState = { ...parcel, frontZMm: parcel.frontZMm + shiftMm };
+  const open = labelCornersWorldMm(label, parcel);
+  const shut = labelCornersWorldMm(label, closed);
+  const intr = sensorIntrinsics(rig.sensor);
+  let max = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = toCameraSpace(open[i], rig);
+    if (a[2] <= 0) continue;
+    const b = toCameraSpace(shut[i], rig);
+    if (b[2] <= 0) continue;
+    const x0 = intr.fx * (a[0] / a[2]) + intr.cx;
+    const y0 = intr.cy - intr.fy * (a[1] / a[2]);
+    const x1 = intr.fx * (b[0] / b[2]) + intr.cx;
+    const y1 = intr.cy - intr.fy * (b[1] / b[2]);
+    max = Math.max(max, Math.hypot(x1 - x0, y1 - y0));
+  }
+  return max;
 }
 
 export type BlurMode = 'OFF' | 'DIRECTIONAL' | 'TEMPORAL_ACCUMULATION';
