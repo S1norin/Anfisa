@@ -1,22 +1,18 @@
 import { SceneCanvas } from '../../scene/sceneCanvas';
 
-/**
- * Operations view (issue #11 will build the full presentation view).
- * For the scaffold: the 3D station canvas placeholder + empty panels.
- */
 export function OperationsView() {
   return (
-    <div className="view view-operations" data-testid="operations-view">
-      <section className="view-canvas" aria-label="3D station">
+    <section className="view" data-testid="operations-view">
+      <div className="view-canvas">
         <SceneCanvas />
-      </section>
-      <aside className="view-side">
+      </div>
+      <div className="view-panel">
         <h2>Operations</h2>
-        <p data-testid="operations-placeholder">
-          Station view. Camera wall, parcel timeline, result card, and live
-          metrics land here in issue #11.
+        <p>
+          Live conveyor cell: parcels, labels, camera status, selection, and
+          dimension overlays land in issue #11.
         </p>
-      </aside>
-    </div>
+      </div>
+    </section>
   );
 }

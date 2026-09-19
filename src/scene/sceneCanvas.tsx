@@ -1,12 +1,8 @@
 import { Canvas } from '@react-three/fiber';
-
-/**
- * Shared R3F canvas placeholder. Issue #3 wires in the station geometry.
- * The canvas is intentionally empty for the scaffold (issue #1).
- *
- * Renders a fallback panel when WebGL is unavailable (also exercised in jsdom
- * tests where no GL context exists).
- */
+import { OrbitControls } from '@react-three/drei';
+import type { SimConfig } from '../domain/config';
+import { defaultConfig } from '../domain/config';
+import { StationScene } from './stationScene';
 
 function hasWebGL(): boolean {
   try {
@@ -20,7 +16,11 @@ function hasWebGL(): boolean {
   }
 }
 
-export function SceneCanvas() {
+/**
+ * Operations 3D canvas (issue #11 extends this with parcels, labels,
+ * camera status, selection, and dimension overlays).
+ */
+export function SceneCanvas({ config = defaultConfig() }: { config?: SimConfig }) {
   if (!hasWebGL()) {
     return (
       <div className="scene-canvas-fallback" data-testid="scene-canvas-fallback">
@@ -33,12 +33,19 @@ export function SceneCanvas() {
     <Canvas
       data-testid="scene-canvas"
       dpr={[1, 2]}
-      camera={{ position: [1.5, 1.2, 2.2], fov: 50, near: 0.001, far: 100 }}
-      className="scene-canvas"
+      camera={{ position: [2.4, 1.6, 3.4], fov: 45, near: 0.05, far: 100 }}
     >
-      <color attach="background" args={['#101418']} />
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[3, 5, 2]} intensity={0.8} />
+      <color attach="background" args={['#161a20']} />
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[4, 6, 3]} intensity={1.1} />
+      <StationScene config={config} />
+      <gridHelper args={[8, 40, '#2f3740', '#222831']} position={[0, -0.8, 1.1]} />
+      <OrbitControls
+        target={[0, 0.3, 1.1]}
+        maxPolarAngle={Math.PI / 2 - 0.02}
+        minDistance={0.4}
+        maxDistance={12}
+      />
     </Canvas>
   );
 }
