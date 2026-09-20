@@ -221,6 +221,13 @@ export class SimStore {
     this.notify();
   }
 
+  /** Advance exactly one domain step while paused (schema view freeze/step). */
+  stepOnce(): boolean {
+    const stepped = this.sim.stepOnce();
+    this.notify();
+    return stepped;
+  }
+
   setSpeed(mmPerSec: number): void {
     this.sim.setSpeed(mmPerSec);
     this.notify();

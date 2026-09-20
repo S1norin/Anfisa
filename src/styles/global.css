@@ -667,6 +667,92 @@ body {
   }
 }
 
+/* ---------- schema view (issue #13) ---------- */
+
+.view-schema {
+  grid-template-columns: minmax(0, 1fr) 300px;
+  min-height: calc(100vh - 50px);
+}
+
+.schema-canvas {
+  flex: 1;
+  height: auto;
+  min-height: 420px;
+}
+
+.schema-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.schema-toolbar-group {
+  display: flex;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 3px;
+}
+
+.schema-toolbar-group button {
+  font-size: 0.85em;
+  padding: 4px 10px;
+}
+
+.schema-toolbar-group button.active {
+  background: rgba(77, 163, 255, 0.2);
+  outline: 1px solid var(--accent);
+}
+
+.schema-time {
+  margin-left: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8em;
+  color: var(--text-dim);
+}
+
+.schema-panel {
+  max-height: calc(100vh - 66px);
+}
+
+.schema-hint {
+  color: var(--text-dim);
+  font-size: 0.85em;
+  margin: 0 0 8px;
+}
+
+.schema-toggles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+
+.schema-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.schema-toggle input {
+  margin: 0;
+}
+
+.schema-export-note {
+  font-size: 0.8em;
+  color: var(--ok, #3fb96f);
+  margin: 0;
+}
+
+@media (max-width: 1023px) {
+  .view-schema {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

@@ -52,6 +52,23 @@ export class Simulation {
   /** Advance the domain by exactly one fixed step (no-op unless RUNNING). */
   step(): void {
     if (this.state.status !== 'RUNNING') return;
+    this.advanceStep();
+  }
+
+  /**
+   * Advance exactly one fixed step while PAUSED (freeze + "step one frame"
+   * controls, issue #13). Returns true when a step was executed.
+   */
+  stepOnce(): boolean {
+    if (this.state.status !== 'PAUSED') return false;
+    const prev = this.state.status;
+    this.state.status = 'RUNNING';
+    this.advanceStep();
+    this.state.status = prev;
+    return true;
+  }
+
+  private advanceStep(): void {
     const s = this.state;
     const dtMs = FIXED_STEP_MS;
 

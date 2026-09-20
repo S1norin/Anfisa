@@ -34,7 +34,15 @@ function applyTransform(group: THREE.Group, state: ParcelState): void {
   group.rotation.y = degToRad(spec.yawDeg);
 }
 
-export function ParcelScene({ state }: { state: ParcelState }) {
+export function ParcelScene({
+  state,
+  schematic = false,
+}: {
+  state: ParcelState;
+  /** Schema-view mode: a single flat unlit box — no tape, no label decals
+   *  (labels are drawn as annotations in the schema scene). */
+  schematic?: boolean;
+}) {
   // spec is immutable after spawn, so the parcelId key is safe.
   const built = useMemo(() => {
     const spec = state.spec;
@@ -47,11 +55,26 @@ export function ParcelScene({ state }: { state: ParcelState }) {
         mmToM(spec.heightMm),
         mmToM(spec.lengthMm),
       ),
-      createMaterial(spec.material),
+      schematic
+        ? new THREE.MeshBasicMaterial({ color: 0x8a97a8 })
+        : createMaterial(spec.material),
     );
     body.name = 'parcel-body';
     body.userData.part = 'parcel-body';
     g.add(body);
+
+    if (schematic) {
+      const dispose = () => {
+        g.traverse((obj) => {
+          if ((obj as THREE.Mesh).isMesh) {
+            (obj as THREE.Mesh).geometry.dispose();
+            ((obj as THREE.Mesh).material as THREE.Material).dispose();
+          }
+        });
+      };
+      applyTransform(g, state);
+      return { group: g, dispose };
+    }
 
     if (spec.tape) {
       const tape = new THREE.Mesh(

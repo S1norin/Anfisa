@@ -130,6 +130,31 @@ describe('fixed-step simulation', () => {
     expect(sim.state.events.map((e) => e.type)).toEqual(['RUN_RESET']);
   });
 
+  it('stepOnce advances exactly one fixed step while paused (issue #13)', () => {
+    const sim = new Simulation(defaultConfig());
+    sim.start();
+    sim.stepMany(400); // let a parcel spawn (default interval 2000ms)
+    expect(sim.state.parcels.size).toBeGreaterThan(0);
+    expect(sim.stepOnce()).toBe(false); // RUNNING: no-op
+    sim.pause();
+    const before = sim.state.simTimeMs;
+    const parcelBefore = [...sim.state.parcels.values()][0].frontZMm;
+
+    expect(sim.stepOnce()).toBe(true);
+    expect(sim.state.status).toBe('PAUSED');
+    expect(sim.state.simTimeMs).toBe(before + FIXED_STEP_MS);
+    const parcelAfter = [...sim.state.parcels.values()][0].frontZMm;
+    const dEncoder = (sim.state.speedMmPerSec * FIXED_STEP_MS) / 1000;
+    expect(parcelAfter).toBeCloseTo(parcelBefore + dEncoder, 6);
+
+    // Stepping paused steps is deterministic: same trajectory as continuous run.
+    const stepped = new Simulation(defaultConfig());
+    stepped.start();
+    stepped.stepMany(401);
+    expect(stepped.state.simTimeMs).toBe(sim.state.simTimeMs);
+    expect(stepped.state.encoderMm).toBe(sim.state.encoderMm);
+  });
+
   it('same seed + config reproduces identical runs (NFR-006, AC-08 core)', () => {
     const run = (mutate: (c: SimConfig) => void) => {
       const cfg = defaultConfig();

@@ -92,7 +92,7 @@ export function CameraLabView() {
             onSelectParcel={setSelectedParcelId}
             frozen={frozen}
             onToggleFreeze={() => (frozen ? simStore.start() : simStore.pause())}
-            onStep={() => simStore.step(10)}
+            onStep={() => simStore.stepOnce()}
             onCommit={(mutator) => simStore.updateConfig(mutator)}
             onFault={(id, faulted) => simStore.setCameraFault(id, faulted)}
           />
