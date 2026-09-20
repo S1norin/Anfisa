@@ -601,6 +601,27 @@ body {
   border-color: var(--accent);
 }
 
+.lab-export-title {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.lab-import-label {
+  font-size: 0.8em;
+  padding: 4px 8px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.lab-import-label:hover {
+  border-color: var(--accent);
+}
+
 .lab-controls .cam-detail {
   border-top: 1px solid var(--panel-border);
   padding-top: 12px;

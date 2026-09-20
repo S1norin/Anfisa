@@ -3,7 +3,7 @@
  * editing. Valid edits commit through the onCommit mutator (AC-03 live
  * path); invalid edits never commit and show the first error.
  */
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import { recommendedSixViewConfig } from '../../capture/presets';
@@ -19,6 +19,11 @@ interface LabTestMocks {
   onFault: Mock;
   onApplyPreset: Mock;
   onFaultScenario: Mock;
+  onExportConfig: Mock;
+  onImportConfig: Mock;
+  onExportRun: Mock;
+  onExportObservations: Mock;
+  onExportMetricsCsv: Mock;
 }
 
 function renderControls(
@@ -33,6 +38,11 @@ function renderControls(
     onFault: vi.fn(),
     onApplyPreset: vi.fn(),
     onFaultScenario: vi.fn(),
+    onExportConfig: vi.fn(),
+    onImportConfig: vi.fn(() => [] as string[]),
+    onExportRun: vi.fn(),
+    onExportObservations: vi.fn(),
+    onExportMetricsCsv: vi.fn(),
   };
   const props: Parameters<typeof LabControls>[0] = {
     config: recommendedSixViewConfig(),
@@ -124,5 +134,44 @@ describe('LabControls', () => {
     expect(props.onFaultScenario).toHaveBeenCalledWith('speed-change');
     fireEvent.click(screen.getByTestId('lab-fault-camera-fault'));
     expect(props.onFaultScenario).toHaveBeenCalledWith('camera-fault');
+  });
+
+  it('export buttons trigger their callbacks (issue #15)', () => {
+    const cfg = recommendedSixViewConfig();
+    const props = renderControls({ config: cfg, selectedCameraId: cfg.cameraRigs[0].id });
+    const row = within(screen.getByTestId('lab-export-row'));
+    fireEvent.click(row.getByTestId('lab-export-config'));
+    expect(props.onExportConfig).toHaveBeenCalledTimes(1);
+    fireEvent.click(row.getByTestId('lab-export-run'));
+    expect(props.onExportRun).toHaveBeenCalledTimes(1);
+    fireEvent.click(row.getByTestId('lab-export-observations'));
+    expect(props.onExportObservations).toHaveBeenCalledTimes(1);
+    fireEvent.click(row.getByTestId('lab-export-metrics-csv'));
+    expect(props.onExportMetricsCsv).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejected import shows the validation error; accepted import clears it', async () => {
+    const cfg = recommendedSixViewConfig();
+    renderControls({
+      config: cfg,
+      selectedCameraId: cfg.cameraRigs[0].id,
+      onImportConfig: vi
+        .fn()
+        .mockReturnValueOnce(['configVersion 99 is not supported'])
+        .mockReturnValueOnce([] as string[]),
+    });
+    const file = screen.getByTestId('lab-import-config') as HTMLInputElement;
+    const makeFile = (text: string) =>
+      Object.defineProperty(new File([text], 'c.json'), 'text', {
+        value: () => Promise.resolve(text),
+        configurable: true,
+      });
+    fireEvent.change(file, { target: { files: [makeFile('bad')] } });
+    const err = await screen.findByTestId('lab-edit-error');
+    expect(err.textContent).toContain('configVersion 99');
+    fireEvent.change(file, { target: { files: [makeFile('good')] } });
+    await waitFor(() =>
+      expect(screen.queryByTestId('lab-edit-error')).toBeNull(),
+    );
   });
 });

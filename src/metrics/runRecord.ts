@@ -74,19 +74,24 @@ export interface RunRecord {
   pipelineEvents: SimEvent[];
 }
 
+/**
+ * The record is deep-copied and deep-frozen, so the input may be a
+ * readonly view of live state (e.g. SimStore getters) — no mutation is
+ * needed or performed.
+ */
 export interface RunRecordInput {
   runId: string;
   seed: number;
   config: SimConfig;
   simTimeMs: number;
   encoderMm: number;
-  groundTruth: RunGroundTruthParcel[];
-  frames: RunFrameMeta[];
-  observations: RunObservationMeta[];
-  results: ParcelResult[];
+  groundTruth: readonly RunGroundTruthParcel[];
+  frames: readonly RunFrameMeta[];
+  observations: readonly RunObservationMeta[];
+  results: readonly ParcelResult[];
   metrics: RunMetrics;
-  simEvents: SimEvent[];
-  pipelineEvents: SimEvent[];
+  simEvents: readonly SimEvent[];
+  pipelineEvents: readonly SimEvent[];
 }
 
 /** Recursively freeze an object (plain data only). */

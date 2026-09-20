@@ -10,6 +10,15 @@
 
 import { useMemo, useState } from 'react';
 import { simStore, useSim } from '../../store/simStore';
+import { importConfigIntoStore } from '../../store/import';
+import { downloadTextFile } from '../../export/download';
+import {
+  buildLiveRunRecord,
+  configToJson,
+  observationsToJson,
+  runRecordToJson,
+} from '../../export/json';
+import { metricsToCsv } from '../../export/csv';
 import { SceneCanvas } from '../../scene/sceneCanvas';
 import { applyPresetToStore, getFaultScenario } from '../../presets';
 import { computeLabReport } from '../lab/labReport';
@@ -102,6 +111,38 @@ export function CameraLabView() {
               applyPresetToStore(simStore, id);
             }}
             onFaultScenario={(id) => getFaultScenario(id)?.apply(simStore)}
+            onExportConfig={() =>
+              downloadTextFile(
+                `anfisa-config-${state.runId}.json`,
+                configToJson(state.config),
+                'application/json',
+              )
+            }
+            onImportConfig={(text) => {
+              const outcome = importConfigIntoStore(simStore, text);
+              return outcome.ok ? [] : outcome.errors;
+            }}
+            onExportRun={() =>
+              downloadTextFile(
+                `anfisa-run-${state.runId}.json`,
+                runRecordToJson(buildLiveRunRecord(simStore, simStore.computeLiveMetrics())),
+                'application/json',
+              )
+            }
+            onExportObservations={() =>
+              downloadTextFile(
+                `anfisa-observations-${state.runId}.json`,
+                observationsToJson(state.runId, state.config.seed, simStore.liveObservations),
+                'application/json',
+              )
+            }
+            onExportMetricsCsv={() =>
+              downloadTextFile(
+                `anfisa-metrics-${state.runId}.csv`,
+                metricsToCsv(simStore.computeLiveMetrics()),
+                'text/csv',
+              )
+            }
           />
         </div>
       </div>

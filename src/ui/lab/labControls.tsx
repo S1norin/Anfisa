@@ -54,6 +54,16 @@ interface LabControlsProps {
   onApplyPreset: (id: string) => void;
   /** Apply a live fault scenario (no reset). */
   onFaultScenario: (id: string) => void;
+  /** Download the current config as a versioned JSON file (CFG-007). */
+  onExportConfig: () => void;
+  /** Import config JSON text; returns validation errors on failure. */
+  onImportConfig: (text: string) => string[];
+  /** Download the full run record (AC-10). */
+  onExportRun: () => void;
+  /** Download the observation audit log (AC-10). */
+  onExportObservations: () => void;
+  /** Download the metrics CSV (AC-10). */
+  onExportMetricsCsv: () => void;
 }
 
 function Field({
@@ -107,6 +117,11 @@ export function LabControls({
   onFault,
   onApplyPreset,
   onFaultScenario,
+  onExportConfig,
+  onImportConfig,
+  onExportRun,
+  onExportObservations,
+  onExportMetricsCsv,
 }: LabControlsProps) {
   const [error, setError] = useState<string | null>(null);
   const rigs = config.cameraRigs;
@@ -216,6 +231,64 @@ export function LabControls({
               {f.name}
             </button>
           ))}
+        </div>
+      </div>
+
+      <div className="lab-row" data-testid="lab-export-row">
+        <span className="lab-export-title">Export / Import</span>
+        <div className="lab-faults">
+          <button
+            type="button"
+            data-testid="lab-export-config"
+            onClick={onExportConfig}
+          >
+            Config JSON
+          </button>
+          <label className="lab-import-label">
+            Import config…
+            <input
+              data-testid="lab-import-config"
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                void file
+                  .text()
+                  .then((text) => {
+                    const errors = onImportConfig(text);
+                    if (errors.length > 0) {
+                      setError(`import rejected: ${errors[0]}`);
+                    } else {
+                      setError(null);
+                    }
+                  });
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            data-testid="lab-export-run"
+            onClick={onExportRun}
+          >
+            Run JSON
+          </button>
+          <button
+            type="button"
+            data-testid="lab-export-observations"
+            onClick={onExportObservations}
+          >
+            Observations JSON
+          </button>
+          <button
+            type="button"
+            data-testid="lab-export-metrics-csv"
+            onClick={onExportMetricsCsv}
+          >
+            Metrics CSV
+          </button>
         </div>
       </div>
 
