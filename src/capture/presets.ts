@@ -20,7 +20,7 @@
 
 import { defaultCameraRigs, lookAtQuaternion, type StationGeometry } from '../domain/camera';
 import { defaultConfig, type SimConfig } from '../domain/config';
-import type { CameraConfig } from '../domain/types';
+import type { AreaScanCameraConfig } from '../domain/types';
 
 type V3 = [number, number, number];
 
@@ -33,7 +33,11 @@ const SIDE_WORKING_DISTANCE_MM = 929;
 /** Top/bottom working distance (mm, face plane to eye). */
 const TOP_WORKING_DISTANCE_MM = 900;
 
-export function aim(rig: CameraConfig, eye: V3, target: V3): CameraConfig {
+export function aim(
+  rig: AreaScanCameraConfig,
+  eye: V3,
+  target: V3,
+): AreaScanCameraConfig {
   const pose = {
     positionMm: eye,
     quaternion: lookAtQuaternion(eye, target),
@@ -48,7 +52,7 @@ export function aim(rig: CameraConfig, eye: V3, target: V3): CameraConfig {
 }
 
 /** The recommended 6-view rigs for a given config's station/parcel sizes. */
-export function recommendedSixViewRigs(config: SimConfig): CameraConfig[] {
+export function recommendedSixViewRigs(config: SimConfig): AreaScanCameraConfig[] {
   const station: StationGeometry = {
     lengthMm: config.station.lengthMm,
     beltWidthMm: config.belt.widthMm,
@@ -123,7 +127,7 @@ export function reportSixViewConfig(): SimConfig {
       shutter: 'GLOBAL',
     },
   );
-  const by = (role: CameraConfig['role']) => base.find((r) => r.role === role)!;
+  const by = (role: AreaScanCameraConfig['role']) => base.find((r) => r.role === role)!;
   const centre: V3 = [0, cfg.parcel.heightMm / 2, cfg.station.lengthMm / 2];
   const radius = 1250;
   const diagonal = radius * Math.SQRT1_2;

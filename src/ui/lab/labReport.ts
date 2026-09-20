@@ -18,6 +18,7 @@ import {
 } from '../../domain/camera';
 import type { SimConfig } from '../../domain/config';
 import type {
+  AreaScanCameraConfig,
   CameraConfig,
   CameraState,
   ParcelState,
@@ -47,7 +48,7 @@ export interface LabReport {
 }
 
 /** Vertical FOV from the physical pinhole model (focal + film gauge). */
-export function vFovDeg(rig: CameraConfig): number {
+export function vFovDeg(rig: AreaScanCameraConfig): number {
   const s = rig.sensor;
   return (
     (2 * Math.atan(s.filmGaugeMm / 2 / s.focalLengthMm) * 180) / Math.PI
@@ -85,7 +86,7 @@ export function lookAtPoint(
  * @param speedMmPerSec belt speed at that instant (motion-blur estimate)
  */
 export function computeLabReport(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   cameraState: CameraState,
   parcel: ParcelState,
   allParcels: ParcelState[],

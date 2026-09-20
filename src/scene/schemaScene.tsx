@@ -14,7 +14,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { Line, OrbitControls, OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { mmToM } from '../domain/units';
-import type { CameraState, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, CameraState, ParcelState } from '../domain/types';
 import type { SimConfig } from '../domain/config';
 import { frustumCornersMm } from '../domain/camera';
 import { StationScene } from './stationScene';
@@ -417,7 +417,7 @@ function labelAnnotationGroups(
     projected: string;
   }[] = [];
   for (const rig of config.cameraRigs) {
-    if (!rig.enabled) continue;
+    if (!rig.enabled || rig.kind !== 'AREA_SCAN') continue;
     for (const a of labelAnnotations(rig, parcel)) {
       out.push({ key: `${rig.id}:${a.labelInstanceId}`, ...a });
     }
@@ -521,7 +521,7 @@ export function SchemaScene({
 
         {toggles.frusta &&
           config.cameraRigs.map((rig) =>
-            rig.enabled ? (
+            rig.enabled && rig.kind === 'AREA_SCAN' ? (
               <FrustumLines
                 key={rig.id}
                 cornersM={toMpts(frustumCornersMm(rig))}
@@ -559,12 +559,12 @@ export function SchemaScene({
 
         {toggles.focusPlanes &&
           config.cameraRigs
-            .filter((r) => r.enabled)
+            .filter((r): r is AreaScanCameraConfig => r.enabled && r.kind === 'AREA_SCAN')
             .map((r) => <FocusPlaneRect key={r.id} corners={focusPlaneCorners(r)} />)}
 
         {toggles.roi &&
           config.cameraRigs
-            .filter((r) => r.enabled)
+            .filter((r): r is AreaScanCameraConfig => r.enabled && r.kind === 'AREA_SCAN')
             .map((r) => {
               const c = roiCorners(r);
               if (!c) return null;

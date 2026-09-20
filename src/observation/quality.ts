@@ -17,7 +17,7 @@
  * values are labelled simulation assumptions, not physical constants.
  */
 
-import type { CameraConfig, ReasonCode } from '../domain/types';
+import type { AreaScanCameraConfig, ReasonCode } from '../domain/types';
 import type { QualityThresholds } from '../domain/config';
 import { exposureMetrics } from '../capture/imageFormation';
 import { labelReasons, type ReasonInput } from './reasons';
@@ -46,7 +46,7 @@ export interface QualityResult {
  * so the visible frame and the measured quality agree.
  */
 export function contrastProxy(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   illuminationFactor = 1,
 ): number {
   const e = exposureMetrics(rig, illuminationFactor);

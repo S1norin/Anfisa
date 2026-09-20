@@ -11,7 +11,12 @@ import { describe, expect, it } from 'vitest';
 import { recommendedSixViewConfig } from '../capture/presets';
 import { defaultConfig } from '../domain/config';
 import type { SimConfig } from '../domain/config';
-import type { LabelInstance, ParcelState, ParcelSpec } from '../domain/types';
+import type {
+  AreaScanCameraConfig,
+  LabelInstance,
+  ParcelState,
+  ParcelSpec,
+} from '../domain/types';
 import { observeLabels, type LabelObservationResult, type ObserveContext } from '../observation/observationEngine';
 import { ParcelPipeline, type PipelineFrame } from '../pipeline/pipeline';
 import { ProcessRun } from '../pipeline/runDriver';
@@ -195,8 +200,8 @@ describe('AC-02: multiple labels and repeated payload', () => {
 
 describe('AC-03: a camera change affects the pipeline', () => {
   const cfg = recommendedSixViewConfig();
-  function topRig() {
-    return cfg.cameraRigs.find((r) => r.role === 'TOP')!;
+  function topRig(): AreaScanCameraConfig {
+    return cfg.cameraRigs.find((r): r is AreaScanCameraConfig => r.role === 'TOP')!;
   }
   const parcel = makeParcel({
     entrySimTimeMs: 800,
@@ -260,7 +265,7 @@ describe('AC-04: exposure and belt speed change what is visible', () => {
     expect(baseMetrics.completeReadRate).toBe(1);
 
     const cfg = cleanBaseline();
-    for (const r of cfg.cameraRigs) r.acquisition.exposureUs = 400;
+    for (const r of cfg.cameraRigs as AreaScanCameraConfig[]) r.acquisition.exposureUs = 400;
     const run = new ProcessRun(cfg, 10);
     run.runToCompletion();
 
@@ -341,7 +346,9 @@ describe('AC-06: sensor fault handling', () => {
     // Parcel with a label visible ONLY to the LEFT reader; the LEFT reader
     // is FAULT. No stale result may be emitted with a decoded payload.
     const cfg = makeCfg();
-    const rig = recommendedSixViewConfig().cameraRigs.find((r) => r.role === 'LEFT')!;
+    const rig = recommendedSixViewConfig().cameraRigs.find(
+      (r): r is AreaScanCameraConfig => r.role === 'LEFT',
+    )!;
     const parcel = makeParcel({
       entrySimTimeMs: 800,
       exitSimTimeMs: 1500,

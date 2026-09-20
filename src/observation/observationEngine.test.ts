@@ -5,7 +5,7 @@
 
 import { defaultCameraRigs, lookAtQuaternion, sensorIntrinsics, toCameraSpace } from '../domain/camera';
 import { defaultConfig } from '../domain/config';
-import type { CameraConfig, LabelInstance, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, LabelInstance, ParcelState } from '../domain/types';
 import { labelMotionBlurPx } from './blur';
 import { observeLabels, type ObserveContext } from './observationEngine';
 import { defocusPx } from '../capture/imageFormation';
@@ -25,7 +25,7 @@ const DEFAULTS = {
  * incidence (≤ 35° target), focused on the label plane — a readable
  * baseline geometry.
  */
-function leftRig(): CameraConfig {
+function leftRig(): AreaScanCameraConfig {
   const rig = defaultCameraRigs(STATION, DEFAULTS).find((r) => r.role === 'LEFT')!;
   const eye: [number, number, number] = [-1200, 700, 1100];
   const target: [number, number, number] = [0, 400, 1100];

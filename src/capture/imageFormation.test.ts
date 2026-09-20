@@ -11,7 +11,7 @@ import {
   defaultCameraRigs,
   defaultEffectToggles,
 } from '../domain/camera';
-import type { CameraConfig, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, ParcelState } from '../domain/types';
 import {
   defocusPx,
   defocusPxWithFocal,
@@ -43,7 +43,10 @@ type DeepPartial<T> = T extends [number, ...number[]]
     ? T
     : { [K in keyof T]?: DeepPartial<T[K]> };
 
-function mergeRig(base: CameraConfig, over: DeepPartial<CameraConfig>): CameraConfig {
+function mergeRig(
+  base: AreaScanCameraConfig,
+  over: DeepPartial<AreaScanCameraConfig>,
+): AreaScanCameraConfig {
   return {
     ...base,
     ...over,
@@ -70,12 +73,16 @@ function mergeRig(base: CameraConfig, over: DeepPartial<CameraConfig>): CameraCo
 const FRONT = defaultCameraRigs(STATION, DEFAULTS)[0];
 const BOTTOM = defaultCameraRigs(STATION, DEFAULTS).find((r) => r.role === 'BOTTOM')!;
 
-function makeFrontRig(over: DeepPartial<CameraConfig> = {}): CameraConfig {
+function makeFrontRig(
+  over: DeepPartial<AreaScanCameraConfig> = {},
+): AreaScanCameraConfig {
   return mergeRig(FRONT, over);
 }
 
 /** BOTTOM reader — sits inside the specular lobe of the top lights. */
-function makeBottomRig(over: DeepPartial<CameraConfig> = {}): CameraConfig {
+function makeBottomRig(
+  over: DeepPartial<AreaScanCameraConfig> = {},
+): AreaScanCameraConfig {
   return mergeRig(BOTTOM, over);
 }
 

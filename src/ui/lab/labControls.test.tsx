@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import { recommendedSixViewConfig } from '../../capture/presets';
 import type { SimConfig } from '../../domain/config';
+import type { AreaScanCameraConfig } from '../../domain/types';
 import { LabControls } from './labControls';
 
 interface LabTestMocks {
@@ -74,9 +75,11 @@ describe('LabControls', () => {
     expect(props.onCommit).toHaveBeenCalledTimes(1);
     const mutator = props.onCommit.mock.calls[0][0] as (c: SimConfig) => SimConfig;
     const next = mutator(cfg);
-    const rig = next.cameraRigs[0];
+    const rig = next.cameraRigs[0] as AreaScanCameraConfig;
     expect(rig.sensor.focalLengthMm).toBe(18);
-    expect(next.cameraRigs[1].sensor.focalLengthMm).toBe(cfg.cameraRigs[1].sensor.focalLengthMm);
+    expect((next.cameraRigs[1] as AreaScanCameraConfig).sensor.focalLengthMm).toBe(
+      (cfg.cameraRigs[1] as AreaScanCameraConfig).sensor.focalLengthMm,
+    );
     expect(screen.queryByTestId('lab-edit-error')).toBeNull();
   });
 

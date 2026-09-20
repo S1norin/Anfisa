@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { validateConfig } from '../domain/config';
 import type { SimConfig } from '../domain/config';
+import type { AreaScanCameraConfig } from '../domain/types';
 import { ProcessRun } from '../pipeline/runDriver';
 import {
   DEFAULT_PRESET_SEED,
@@ -101,7 +102,7 @@ describe('named presets (CFG-002)', () => {
     const cfg = getPreset('glare-stress')!.build();
     expect(cfg.parcel.tapeChance).toBe(1);
     expect(cfg.parcel.material).toBe('WHITE_CARD');
-    for (const r of cfg.cameraRigs) {
+    for (const r of cfg.cameraRigs as AreaScanCameraConfig[]) {
       expect(r.illumination.polarized).toBe(false);
       expect(r.illumination.ambientLeak).toBeGreaterThan(0.5);
       expect(r.optics.apertureProxy).toBeLessThan(4);

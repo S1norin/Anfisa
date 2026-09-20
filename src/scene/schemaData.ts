@@ -20,7 +20,7 @@ import {
   parcelCentreWorldMm,
   projectLabelMm,
 } from '../observation/projection';
-import type { CameraConfig, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, CameraConfig, ParcelState } from '../domain/types';
 import type { SimConfig } from '../domain/config';
 import { getStationDimensions } from './stationGeometry';
 
@@ -131,7 +131,7 @@ export function dimensionLines(
 // ---------------------------------------------------------------------------
 
 /** Vertical FOV (deg) of a rig's physical pinhole model. */
-export function rigVFovDeg(rig: CameraConfig): number {
+export function rigVFovDeg(rig: AreaScanCameraConfig): number {
   const s = rig.sensor;
   return (2 * Math.atan(s.filmGaugeMm / 2 / s.focalLengthMm) * 180) / Math.PI;
 }
@@ -153,7 +153,9 @@ export interface ScanZone {
  */
 export function scanZones(rigs: CameraConfig[]): ScanZone[] {
   return rigs
-    .filter((r) => r.enabled)
+    // Line scanners have no area frustum; they get dedicated plane
+    // annotations (t10).
+    .filter((r): r is AreaScanCameraConfig => r.enabled && r.kind === 'AREA_SCAN')
     .map((rig) => {
       const fwd = localAxes(rig.pose.quaternion).z;
       const dist = rig.acquisition.focusDistanceMm;
@@ -180,7 +182,7 @@ export function opticalAxes(rigs: CameraConfig[]): {
   to: V3;
 }[] {
   return rigs
-    .filter((r) => r.enabled)
+    .filter((r): r is AreaScanCameraConfig => r.enabled && r.kind === 'AREA_SCAN')
     .map((rig) => {
       const dist = rig.acquisition.focusDistanceMm;
       return {
@@ -195,7 +197,7 @@ export function opticalAxes(rigs: CameraConfig[]): {
  * Focus plane rectangle corners (world mm) at the rig's focus distance:
  * the physical image-plane size at that range, oriented like the camera.
  */
-export function focusPlaneCorners(rig: CameraConfig): V3[] {
+export function focusPlaneCorners(rig: AreaScanCameraConfig): V3[] {
   const dist = rig.acquisition.focusDistanceMm;
   const aspect = rig.sensor.widthPx / rig.sensor.heightPx;
   const halfH = dist * Math.tan((rigVFovDeg(rig) * Math.PI) / 360);
@@ -232,7 +234,7 @@ function localAxes(q: Quat): { x: V3; y: V3; z: V3 } {
  * Sensor ROI rectangle (world mm) on the near plane, when the rig has an
  * ROI configured. ROI units are sensor pixels (x right, y down from top).
  */
-export function roiCorners(rig: CameraConfig): V3[] | null {
+export function roiCorners(rig: AreaScanCameraConfig): V3[] | null {
   const roi = rig.sensor.roi;
   if (!roi) return null;
   // Match sensorIntrinsics: pixel pitch from film gauge on the short edge.
@@ -382,7 +384,7 @@ export interface LabelAnnotation {
  * physical projection the pipeline uses).
  */
 export function labelAnnotations(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   parcel: ParcelState,
 ): LabelAnnotation[] {
   const camPos = rig.pose.positionMm;

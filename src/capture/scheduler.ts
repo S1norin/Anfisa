@@ -13,6 +13,7 @@
 
 import { nextCameraState, projectPointMm } from '../domain/camera';
 import type {
+  AreaScanCameraConfig,
   CameraConfig,
   CameraState,
   ParcelState,
@@ -53,7 +54,7 @@ export function parcelCentreMm(p: ParcelState): [number, number, number] {
  * Map iteration is deterministic, so runs are reproducible).
  */
 export function visibleParcelIds(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   parcels: Iterable<ParcelState>,
 ): string[] {
   const ids: string[] = [];
@@ -78,6 +79,9 @@ export function scheduleCaptures(input: ScheduleInput): ScheduleOutput {
 
   for (const rig of input.rigs) {
     if (!rig.enabled) continue;
+    // Area-scan frame scheduling; line-scan rigs run on the encoder-
+    // synced LINE_SCAN_* session (t4) and are skipped here.
+    if (rig.kind !== 'AREA_SCAN') continue;
     let state = states[rig.id] ?? 'OFFLINE';
     if (state === 'OFFLINE' || state === 'FAULT') continue;
 

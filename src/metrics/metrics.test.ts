@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type {
+  AreaScanCameraConfig,
   ParcelResult,
   ParcelState,
 } from '../domain/types';
@@ -353,7 +354,7 @@ describe('recommended 6-view preset', () => {
     expect(cfg.cameraRigs).toHaveLength(6);
     const roles = cfg.cameraRigs.map((r) => r.role).sort();
     expect(roles).toEqual(['BOTTOM', 'FRONT', 'LEFT', 'REAR', 'RIGHT', 'TOP']);
-    for (const rig of cfg.cameraRigs) {
+    for (const rig of cfg.cameraRigs as AreaScanCameraConfig[]) {
       expect(rig.enabled).toBe(true);
       expect(rig.optics.apertureProxy).toBe(22);
       expect(rig.acquisition.focusDistanceMm).toBeGreaterThan(0);

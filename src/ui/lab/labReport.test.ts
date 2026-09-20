@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { recommendedSixViewConfig } from '../../capture/presets';
-import type { LabelInstance, ParcelState } from '../../domain/types';
+import type { AreaScanCameraConfig, LabelInstance, ParcelState } from '../../domain/types';
 import {
   computeLabReport,
   lookAtPoint,
@@ -54,7 +54,7 @@ function testParcel(): ParcelState {
 
 describe('vFovDeg', () => {
   it('derives from focal length and film gauge', () => {
-    const rig = recommendedSixViewConfig().cameraRigs[0];
+    const rig = recommendedSixViewConfig().cameraRigs[0] as AreaScanCameraConfig;
     const s = rig.sensor;
     const expected = (2 * Math.atan(s.filmGaugeMm / 2 / s.focalLengthMm) * 180) / Math.PI;
     expect(vFovDeg(rig)).toBeCloseTo(expected, 6);
@@ -62,7 +62,7 @@ describe('vFovDeg', () => {
 
   it('longer focal → narrower FOV', () => {
     const cfg = recommendedSixViewConfig();
-    const rig = cfg.cameraRigs[0];
+    const rig = cfg.cameraRigs[0] as AreaScanCameraConfig;
     const narrow = {
       ...rig,
       sensor: { ...rig.sensor, focalLengthMm: rig.sensor.focalLengthMm * 2 },
@@ -73,9 +73,11 @@ describe('vFovDeg', () => {
 
 describe('computeLabReport', () => {
   const cfg = recommendedSixViewConfig();
+  const areaRig = (role: string): AreaScanCameraConfig =>
+    cfg.cameraRigs.find((r): r is AreaScanCameraConfig => r.role === role)!;
 
   it('TOP rig: distance matches geometry, top label is in-FOV, high PPM', () => {
-    const rig = cfg.cameraRigs.find((r) => r.role === 'TOP')!;
+    const rig = areaRig('TOP');
     const parcel = testParcel();
     const report = computeLabReport(
       rig,
@@ -101,7 +103,7 @@ describe('computeLabReport', () => {
   });
 
   it('camera fault → CAMERA_FAULT reason, zero quality', () => {
-    const rig = cfg.cameraRigs.find((r) => r.role === 'TOP')!;
+    const rig = areaRig('TOP');
     const parcel = testParcel();
     const report = computeLabReport(rig, 'FAULT', parcel, [parcel], 0, 0, cfg);
     expect(report.best!.reasons).toContain('CAMERA_FAULT');
@@ -109,7 +111,7 @@ describe('computeLabReport', () => {
   });
 
   it('aimed the other way → OUT_OF_FOV / BACK_FACING reasons', () => {
-    const rig = cfg.cameraRigs.find((r) => r.role === 'TOP')!;
+    const rig = areaRig('TOP');
     const parcel = testParcel();
     // Aim 180° away: straight UP from a top camera → label behind the lens.
     const flipped = {
@@ -126,7 +128,7 @@ describe('computeLabReport', () => {
   });
 
   it('blur scales with belt speed', () => {
-    const rig = cfg.cameraRigs.find((r) => r.role === 'FRONT')!;
+    const rig = areaRig('FRONT');
     const parcel = testParcel();
     const slow = computeLabReport(rig, 'IDLE', parcel, [parcel], 0, 100, cfg);
     const fast = computeLabReport(rig, 'IDLE', parcel, [parcel], 0, 1000, cfg);
@@ -139,7 +141,9 @@ describe('computeLabReport', () => {
 describe('lookTargetMm / lookAtPoint', () => {
   it('round-trips: aim at a point, the look target returns to it', () => {
     const cfg = recommendedSixViewConfig();
-    const rig = cfg.cameraRigs.find((r) => r.role === 'TOP')!;
+    const rig = cfg.cameraRigs.find(
+      (r): r is AreaScanCameraConfig => r.role === 'TOP',
+    )!;
     const point: [number, number, number] = [50, 200, 1100];
     const aimed = {
       ...rig,

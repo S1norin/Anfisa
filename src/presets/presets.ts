@@ -20,7 +20,7 @@ import {
   reportSixViewConfig,
 } from '../capture/presets';
 import { defaultConfig, validateConfig, type SimConfig } from '../domain/config';
-import type { CameraConfig, CameraRole } from '../domain/types';
+import type { AreaScanCameraConfig, CameraConfig, CameraRole } from '../domain/types';
 import type { SimStore } from '../store/simStore';
 
 export const DEFAULT_PRESET_SEED = 2026;
@@ -138,7 +138,8 @@ export const PRESETS: readonly PresetDef[] = [
       cfg.parcel.material = 'WHITE_CARD';
       cfg.parcel.tapeChance = 1;
       cfg.parcel.labelDamageChance = 0;
-      cfg.cameraRigs = cfg.cameraRigs.map((r) => ({
+      // All area-scan rigs in this preset; line-scan variants land in t2.
+      cfg.cameraRigs = (cfg.cameraRigs as AreaScanCameraConfig[]).map((r) => ({
         ...r,
         illumination: {
           ...r.illumination,
@@ -228,10 +229,10 @@ export const FAULT_SCENARIOS: readonly FaultScenarioDef[] = [
     apply: (store) =>
       store.updateConfig((cfg) => ({
         ...cfg,
-        cameraRigs: cfg.cameraRigs.map((r) => ({
+        cameraRigs: (cfg.cameraRigs as AreaScanCameraConfig[]).map((r) => ({
           ...r,
           acquisition: { ...r.acquisition, shutter: 'ROLLING' as const },
-        })),
+        })) as CameraConfig[],
       })),
   },
   {

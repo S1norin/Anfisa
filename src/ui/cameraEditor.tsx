@@ -18,7 +18,7 @@ import {
   type Quat,
 } from '../domain/camera';
 import type { SimConfig } from '../domain/config';
-import type { CameraConfig, CameraRole, CameraState } from '../domain/types';
+import type { AreaScanCameraConfig, CameraConfig, CameraRole, CameraState } from '../domain/types';
 
 const ROLES: CameraRole[] = [
   'FRONT',
@@ -117,6 +117,18 @@ export function CameraEditor({
   const patchSelected = (patch: (r: CameraConfig) => CameraConfig) => {
     if (!selected) return;
     applyRigs(rigs.map((r) => (r.id === selected.id ? patch(r) : r)));
+  };
+
+  /** Area-rig-only patches (sensor/acquisition/optics/illumination). */
+  const patchSelectedArea = (
+    patch: (r: AreaScanCameraConfig) => AreaScanCameraConfig,
+  ) => {
+    if (!selected || selected.kind !== 'AREA_SCAN') return;
+    applyRigs(
+      rigs.map((r) =>
+        r.id === selected.id ? (patch(r as AreaScanCameraConfig) as CameraConfig) : r,
+      ),
+    );
   };
 
   return (
@@ -233,13 +245,15 @@ export function CameraEditor({
             ))}
           </div>
 
+          {selected.kind === 'AREA_SCAN' ? (
+            <>
           <div className="cam-section">Sensor</div>
           <div className="cam-grid">
             <Field
               label="Width px"
               value={selected.sensor.widthPx}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   sensor: { ...r.sensor, widthPx: n },
                 }))
@@ -249,7 +263,7 @@ export function CameraEditor({
               label="Height px"
               value={selected.sensor.heightPx}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   sensor: { ...r.sensor, heightPx: n },
                 }))
@@ -259,7 +273,7 @@ export function CameraEditor({
               label="Focal mm"
               value={selected.sensor.focalLengthMm}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   sensor: { ...r.sensor, focalLengthMm: n },
                 }))
@@ -269,7 +283,7 @@ export function CameraEditor({
               label="Film gauge mm"
               value={selected.sensor.filmGaugeMm}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   sensor: { ...r.sensor, filmGaugeMm: n },
                 }))
@@ -279,7 +293,7 @@ export function CameraEditor({
               label="Near mm"
               value={selected.sensor.nearMm}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   sensor: { ...r.sensor, nearMm: n },
                 }))
@@ -289,7 +303,7 @@ export function CameraEditor({
               label="Far mm"
               value={selected.sensor.farMm}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   sensor: { ...r.sensor, farMm: n },
                 }))
@@ -303,7 +317,7 @@ export function CameraEditor({
               label="FPS"
               value={selected.acquisition.fps}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   acquisition: { ...r.acquisition, fps: n },
                 }))
@@ -313,7 +327,7 @@ export function CameraEditor({
               label="Exposure µs"
               value={selected.acquisition.exposureUs}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   acquisition: { ...r.acquisition, exposureUs: n },
                 }))
@@ -323,7 +337,7 @@ export function CameraEditor({
               label="Gain dB"
               value={selected.acquisition.gainDb}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   acquisition: { ...r.acquisition, gainDb: n },
                 }))
@@ -337,7 +351,7 @@ export function CameraEditor({
               label="Intensity"
               value={selected.illumination.intensity}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   illumination: { ...r.illumination, intensity: n },
                 }))
@@ -347,13 +361,20 @@ export function CameraEditor({
               label="Strobe µs"
               value={selected.illumination.strobeUs}
               onValue={(n) =>
-                patchSelected((r) => ({
+                patchSelectedArea((r) => ({
                   ...r,
                   illumination: { ...r.illumination, strobeUs: n },
                 }))
               }
             />
           </div>
+            </>
+          ) : (
+            <p className="cam-section">
+              Line-scan rig — line fields (sensor width, encoder step, scan
+              plane, line rate) are editable in t10.
+            </p>
+          )}
 
           <label className="cam-field cam-check">
             <input

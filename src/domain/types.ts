@@ -84,7 +84,12 @@ export interface ParcelResult {
   exitToResultMs: number;
 }
 
-export interface CameraConfig {
+/**
+ * Area-scan reader (the v2 rig type): one 2-D sensor capturing frames at
+ * a fixed fps. Kind discriminator added in config v3.
+ */
+export interface AreaScanCameraConfig {
+  kind: 'AREA_SCAN';
   id: string;
   name: string;
   role: CameraRole;
@@ -147,6 +152,59 @@ export interface CameraConfig {
   preview: { widthPx: number; heightPx: number; overlay: boolean };
   enabled: boolean;
 }
+
+/**
+ * Encoder-synced line-scan rig (config v3, LINE_SCAN): a line sensor
+ * across the belt imaging one row per encoder step. A parcel's full strip
+ * is assembled while it crosses `line.scanPlaneZMm`; the sim emits the
+ * bounded LINE_SCAN_* event set (started/completed/aborted), never
+ * per-line data.
+ */
+export interface LineScanCameraConfig {
+  kind: 'LINE_SCAN';
+  id: string;
+  name: string;
+  role: CameraRole;
+  pose: {
+    positionMm: [number, number, number];
+    quaternion: [number, number, number, number]; // x, y, z, w
+  };
+  line: {
+    /** Pixels across the belt per acquired line. */
+    pixelsPerLine: number;
+    /** Physical line-sensor width across the belt, mm. */
+    sensorWidthMm: number;
+    /** Encoder travel per acquired line, mm. */
+    encoderStepMmPerLine: number;
+    /** Hardware ceiling: maximum lines per second. */
+    maxLineRateLinesPerSec: number;
+    /** Maximum strip length per parcel, mm (safety bound). */
+    maxStripLengthMm: number;
+    /** Z (mm) of the belt-normal plane where the line image is formed. */
+    scanPlaneZMm: number;
+    /** Per-line exposure, µs. */
+    lineExposureUs: number;
+  };
+  illumination: {
+    intensity: number;
+    polarized: boolean;
+    ambientLeak: number;
+  };
+  /** Strip-reconstruction degradations, each 0..1. */
+  imageEffects: {
+    /** Encoder-to-line mapping jitter. */
+    jitter: number;
+    /** Per-line probability of a dropped line. */
+    missingLineChance: number;
+    /** Periodic banding strength. */
+    banding: number;
+  };
+  preview: { widthPx: number; heightPx: number; overlay: boolean };
+  enabled: boolean;
+}
+
+/** Any reader rig (config v3 discriminated union). */
+export type CameraConfig = AreaScanCameraConfig | LineScanCameraConfig;
 
 export interface FrameObservation {
   frameId: string;

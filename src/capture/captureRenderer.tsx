@@ -63,7 +63,8 @@ export function CaptureRenderer() {
       const ev = state.events[consumedRef.current++];
       if (ev.type !== 'CAMERA_CAPTURED') continue;
       const rig = state.config.cameraRigs.find((r) => r.id === ev.cameraId);
-      if (!rig) continue;
+      // Area-scan frame path; line-scan rigs get their own strip pipeline (t4+).
+      if (!rig || rig.kind !== 'AREA_SCAN') continue;
 
       const last = lastRenderRef.current[rig.id];
       const due =

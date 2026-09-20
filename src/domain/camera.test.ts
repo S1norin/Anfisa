@@ -1,6 +1,7 @@
 import {
   cloneCameraRig,
   defaultCameraRigs,
+  defaultLineScanRig,
   moveCameraRig,
   frustumCornersMm,
   nextCameraId,
@@ -169,7 +170,7 @@ describe('CRUD (CAM-002)', () => {
   });
 
   it('removes, disables, and re-enables rigs', () => {
-    let rs = rigs();
+    let rs: CameraConfig[] = rigs();
     rs = removeCameraRig(rs, 'CAM-002');
     expect(rs).toHaveLength(5);
     rs = setCameraRigEnabled(rs, 'CAM-005', false);
@@ -251,5 +252,70 @@ describe('validation (CFG-001, NFR-007)', () => {
   it('keeps whole-config validation green for the default config', () => {
     const cfg = defaultConfig();
     expect(validateCameraRigs(cfg.cameraRigs)).toEqual([]);
+  });
+
+  it('LINE_SCAN: a valid line rig validates with no area fields', () => {
+    const rs = rigs();
+    const line = defaultLineScanRig(
+      'CAM-L01',
+      'TOP',
+      [0, 2000, 1100],
+      [0, 0, 0, 1],
+      0,
+    );
+    const errs = validateCameraRigs([...rs, line]);
+    expect(errs).toEqual([]);
+  });
+
+  it('LINE_SCAN: area-only blocks are rejected with named field errors', () => {
+    const line = defaultLineScanRig(
+      'CAM-L01',
+      'TOP',
+      [0, 2000, 1100],
+      [0, 0, 0, 1],
+      0,
+    );
+    // v2-leak shape: an acquisition block (exposureMs etc.) on a line rig.
+    const bad = {
+      ...line,
+      acquisition: { fps: 20, exposureUs: 75, gainDb: 0, focusDistanceMm: 900, shutter: 'GLOBAL' },
+    } as unknown as CameraConfig;
+    const errs = validateCameraRigs([bad]);
+    expect(
+      errs.some((e) => e.path === 'cameraRigs[0].acquisition'),
+    ).toBe(true);
+  });
+
+  it('LINE_SCAN: out-of-range line fields are rejected by name', () => {
+    const line = defaultLineScanRig(
+      'CAM-L01',
+      'TOP',
+      [0, 2000, 1100],
+      [0, 0, 0, 1],
+      0,
+    );
+    const bad = {
+      ...line,
+      line: { ...line.line, encoderStepMmPerLine: 0.001, maxLineRateLinesPerSec: 10 },
+    } as CameraConfig;
+    const errs = validateCameraRigs([bad]);
+    expect(
+      errs.some((e) => e.path === 'cameraRigs[0].line.encoderStepMmPerLine'),
+    ).toBe(true);
+    expect(
+      errs.some((e) => e.path === 'cameraRigs[0].line.maxLineRateLinesPerSec'),
+    ).toBe(true);
+  });
+
+  it('mixed AREA + LINE rigs validate together', () => {
+    const rs = rigs();
+    const line = defaultLineScanRig(
+      'CAM-L02',
+      'BOTTOM',
+      [0, -400, 1100],
+      [0, 0, 0, 1],
+      0,
+    );
+    expect(validateCameraRigs([...rs.slice(0, 4), line] as CameraConfig[])).toEqual([]);
   });
 });

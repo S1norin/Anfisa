@@ -15,7 +15,7 @@
  *                     label observation per frame).
  */
 
-import { CONFIG_VERSION, validateConfig, type SimConfig } from '../domain/config';
+import { CONFIG_VERSION, migrateConfigToLatest, validateConfig, type SimConfig } from '../domain/config';
 import type { SimEvent } from '../domain/types';
 import type { SimStore } from '../store/simStore';
 import type { RunMetrics } from '../metrics/metrics';
@@ -74,8 +74,8 @@ export type ConfigImportResult =
  * Parse + validate an exported config file (CFG-003/CFG-007):
  *  1. JSON must parse;
  *  2. `kind` must be `anfisa-config`;
- *  3. `configVersion` must equal the current CONFIG_VERSION (unknown
- *     future versions are rejected, not guessed);
+ *  3. `configVersion` must be a supported version (v2 is migrated to v3;
+ *     unknown future versions are rejected, not guessed);
  *  4. the config must pass the full CFG-001 validation.
  */
 export function parseConfigImport(text: string): ConfigImportResult {
@@ -93,19 +93,23 @@ export function parseConfigImport(text: string): ConfigImportResult {
     return { ok: false, errors: [`not an ${CONFIG_KIND} file (missing/unknown "kind")`] };
   }
   const env = parsed as ConfigEnvelope;
-  if (env.configVersion !== CONFIG_VERSION) {
+  if (env.configVersion !== 2 && env.configVersion !== CONFIG_VERSION) {
     return {
       ok: false,
       errors: [
-        `configVersion ${env.configVersion} is not supported (this build reads ${CONFIG_VERSION})`,
+        `configVersion ${env.configVersion} is not supported (this build reads ${CONFIG_VERSION} and imports v2)`,
       ],
     };
   }
-  const errors = validateConfig(env.config);
+  const migrated = migrateConfigToLatest(env.config);
+  if (!migrated) {
+    return { ok: false, errors: ['config could not be migrated to the latest shape'] };
+  }
+  const errors = validateConfig(migrated);
   if (errors.length > 0) {
     return { ok: false, errors: errors.map((e) => `${e.path}: ${e.message}`) };
   }
-  return { ok: true, config: env.config };
+  return { ok: true, config: migrated };
 }
 
 /** Serialize a full run record (AC-10: config version, seed, ground truth, camera snapshots, observations, results, metrics). */

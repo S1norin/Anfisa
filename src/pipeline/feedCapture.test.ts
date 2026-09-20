@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { defaultCameraRigs, lookAtQuaternion, toCameraSpace } from '../domain/camera';
 import { defaultConfig } from '../domain/config';
 import type { SimConfig } from '../domain/config';
-import type { CameraConfig, LabelInstance, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, LabelInstance, ParcelState } from '../domain/types';
 import { ParcelPipeline } from './pipeline';
 import { feedCaptureEvent as feedCapture } from './feedCapture';
 
@@ -22,7 +22,7 @@ const DEFAULTS = {
   shutter: 'GLOBAL' as const,
 };
 
-function leftRig(): CameraConfig {
+function leftRig(): AreaScanCameraConfig {
   const rig = defaultCameraRigs(STATION, DEFAULTS).find((r) => r.role === 'LEFT')!;
   const eye: [number, number, number] = [-1200, 700, 1100];
   const target: [number, number, number] = [0, 400, 1100];

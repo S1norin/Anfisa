@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { CONFIG_VERSION, defaultConfig } from '../domain/config';
+import { defaultLineScanRig } from '../domain/camera';
 import type { SimEvent } from '../domain/types';
 import { recommendedSixViewConfig } from '../capture/presets';
 import { ProcessRun } from '../pipeline/runDriver';
@@ -85,6 +86,61 @@ describe('config export/import (CFG-003, CFG-007)', () => {
       expect(result.errors.length).toBeGreaterThan(0);
       expect(result.errors[0]).toContain('belt.speedMmPerSec');
     }
+  });
+
+  it('imports a v2-serialized config as AREA_SCAN v3 with unchanged behavior', () => {
+    const cfg = defaultConfig();
+    const env = JSON.parse(configToJson(cfg)) as {
+      kind: string;
+      configVersion: number;
+      config: {
+        version: number;
+        cameraRigs: Record<string, unknown>[];
+      };
+    };
+    // Downgrade to the v2 shape: version 2 in envelope and body, no
+    // `kind` discriminator on the rigs.
+    env.configVersion = 2;
+    env.config.version = 2;
+    env.config.cameraRigs = env.config.cameraRigs.map((r) => {
+      const rest: Record<string, unknown> = { ...r };
+      delete rest.kind;
+      return rest;
+    });
+    const result = parseConfigImport(JSON.stringify(env));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.config.version).toBe(CONFIG_VERSION);
+    for (const r of result.config.cameraRigs) expect(r.kind).toBe('AREA_SCAN');
+    // Unchanged behavior: the migrated config equals the original once the
+    // kind discriminator is set on every rig.
+    const originalV3 = cfg.cameraRigs.map((r) => ({ ...r }));
+    expect(result.config.cameraRigs).toEqual(originalV3);
+  });
+
+  it('a mixed AREA + LINE config exports as v3 and round-trips deep-equal', () => {
+    const cfg = defaultConfig();
+    const line = defaultLineScanRig(
+      'CAM-L01',
+      'TOP',
+      [0, 2000, 1100],
+      [0, 0, 0, 1],
+      0,
+    );
+    cfg.cameraRigs = [
+      ...cfg.cameraRigs.filter((r) => r.role !== 'TOP'),
+      line,
+    ];
+    const text = configToJson(cfg);
+    const env = JSON.parse(text);
+    expect(env.configVersion).toBe(CONFIG_VERSION);
+    const result = parseConfigImport(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(JSON.stringify(result.config)).toBe(JSON.stringify(cfg));
+    const kinds = result.config.cameraRigs.map((r) => r.kind);
+    expect(kinds).toContain('AREA_SCAN');
+    expect(kinds).toContain('LINE_SCAN');
   });
 
   it('AC-10: export -> import -> re-run reproduces identical results', () => {

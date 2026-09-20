@@ -53,6 +53,8 @@ export function feedCaptureEvent(
   const frameId = input.frameId ?? `${input.cameraId}@${input.simTimeMs}`;
   const rig = input.config.cameraRigs.find((r) => r.id === input.cameraId);
   if (!rig) return { observations: [], stats: EMPTY_STATS(frameId) };
+  // Area-scan frame path; line-scan strips arrive via their own events (t6).
+  if (rig.kind !== 'AREA_SCAN') return { observations: [], stats: EMPTY_STATS(frameId) };
 
   const candidates = input.candidateParcelIds
     .map((id) => input.parcels.get(id))

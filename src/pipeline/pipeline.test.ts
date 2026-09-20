@@ -7,7 +7,13 @@
 import { defaultCameraRigs, lookAtQuaternion, toCameraSpace } from '../domain/camera';
 import { defaultConfig } from '../domain/config';
 import type { SimConfig } from '../domain/config';
-import type { AssociationMismatch, CameraConfig, LabelInstance, ParcelState } from '../domain/types';
+import type {
+  AreaScanCameraConfig,
+  AssociationMismatch,
+  CameraConfig,
+  LabelInstance,
+  ParcelState,
+} from '../domain/types';
 import { observeLabels, type LabelObservationResult, type ObserveContext } from '../observation/observationEngine';
 import { exitToAckMs } from '../domain/events';
 import { decodeObservation } from './decoder';
@@ -28,7 +34,7 @@ const DEFAULTS = {
   shutter: 'GLOBAL' as const,
 };
 
-function leftRig(): CameraConfig {
+function leftRig(): AreaScanCameraConfig {
   const rig = defaultCameraRigs(STATION, DEFAULTS).find((r) => r.role === 'LEFT')!;
   const eye: [number, number, number] = [-1200, 700, 1100];
   const target: [number, number, number] = [0, 400, 1100];

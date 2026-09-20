@@ -17,7 +17,7 @@ import {
   sensorIntrinsics,
   toCameraSpace,
 } from '../domain/camera';
-import type { CameraConfig, LabelInstance, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, LabelInstance, ParcelState } from '../domain/types';
 import { labelCornersWorldMm } from './projection';
 
 export interface BlurInput {
@@ -44,7 +44,7 @@ export function motionBlurPx(input: BlurInput): number {
  * PLUS the exposure window. Global shutter integrates the whole frame at
  * once.
  */
-export function effectiveExposureS(rig: CameraConfig): number {
+export function effectiveExposureS(rig: AreaScanCameraConfig): number {
   const expS = rig.acquisition.exposureUs / 1e6;
   if (rig.acquisition.shutter === 'ROLLING') {
     return expS + rig.acquisition.rollingReadoutUs / 1e6;
@@ -56,7 +56,7 @@ export function effectiveExposureS(rig: CameraConfig): number {
  * Analytic blur for a parcel (its world centre) at a given belt speed.
  */
 export function parcelMotionBlurPx(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   parcel: ParcelState,
   speedMmPerSec: number,
 ): number {
@@ -88,7 +88,7 @@ export function parcelMotionBlurPx(
  * label is out of FOV; the quality model gates on coverage anyway).
  */
 export function labelMotionBlurPx(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   label: LabelInstance,
   parcel: ParcelState,
   speedMmPerSec: number,
@@ -136,7 +136,7 @@ export interface MotionBlurVisual {
  * Image-space velocity direction of the belt (world +Z travel) as seen by
  * the rig, derived from the pose rotation alone (view direction).
  */
-export function travelDirectionImageSpace(rig: CameraConfig): [number, number] {
+export function travelDirectionImageSpace(rig: AreaScanCameraConfig): [number, number] {
   // Camera-space velocity of world travel (same transform as toCameraSpace).
   const camV = quatRotate(quatConjugate(rig.pose.quaternion), [0, 0, 1]);
   // Image-space direction is the lateral component of the camera-space
@@ -154,7 +154,7 @@ export function travelDirectionImageSpace(rig: CameraConfig): [number, number] {
  * parcelMotionBlurPx and never sees this factor (IMG-003).
  */
 export function motionBlurVisual(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   parcel: ParcelState,
   speedMmPerSec: number,
   amplification: number,

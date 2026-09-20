@@ -20,7 +20,7 @@ import {
 } from '../domain/camera';
 import type { SimConfig } from '../domain/config';
 import type {
-  CameraConfig,
+  AreaScanCameraConfig,
   CameraState,
   LabelObservation,
   ParcelState,
@@ -61,7 +61,7 @@ export interface LabelObservationResult extends LabelObservation {
  * @param config       sim config (quality thresholds, barcode x-dimension, seed)
  */
 export function observeLabels(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   cameraState: CameraState,
   candidates: ParcelState[],
   allParcels: ParcelState[],

@@ -46,7 +46,7 @@ export function CameraLabView() {
     null;
 
   const report =
-    rig && parcel
+    rig && parcel && rig.kind === 'AREA_SCAN'
       ? computeLabReport(
           rig,
           state.cameraStates[rig.id] ?? 'OFFLINE',
@@ -74,7 +74,7 @@ export function CameraLabView() {
               onSelectParcel={setSelectedParcelId}
               cameraView
             />
-            {rig && (
+            {rig && rig.kind === 'AREA_SCAN' && (
               <div className="camera-view-hud" aria-label="Active camera view">
                 <span className="camera-view-live">CAMERA VIEW</span>
                 <strong>{rig.name}</strong>

@@ -7,7 +7,7 @@ import {
   travelDirectionImageSpace,
 } from './blur';
 import { defaultCameraRigs, sensorIntrinsics, toCameraSpace } from '../domain/camera';
-import type { CameraConfig, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, ParcelState } from '../domain/types';
 import { labelCornersWorldMm } from './projection';
 
 const STATION = { lengthMm: 2200, beltWidthMm: 650 };
@@ -81,7 +81,7 @@ describe('effectiveExposureS (IMG-004)', () => {
   });
 
   it('rolling shutter: exposure + row readout', () => {
-    const rig: CameraConfig = { ...rigs()[0], acquisition: { ...rigs()[0].acquisition, shutter: 'ROLLING', rollingReadoutUs: 30000 } };
+    const rig: AreaScanCameraConfig = { ...rigs()[0], acquisition: { ...rigs()[0].acquisition, shutter: 'ROLLING', rollingReadoutUs: 30000 } };
     expect(effectiveExposureS(rig)).toBeCloseTo(75e-6 + 30000e-6, 12);
   });
 });
@@ -128,7 +128,7 @@ describe('motionBlurVisual (IMG-002, IMG-003)', () => {
   const P = () => parcel(1100); // centre z=1100, 1800 mm below the TOP reader
 
   it('OFF mode emits nothing', () => {
-    const rig: CameraConfig = { ...TOP(), imageEffects: { ...TOP().imageEffects, motionBlur: 'OFF' } };
+    const rig: AreaScanCameraConfig = { ...TOP(), imageEffects: { ...TOP().imageEffects, motionBlur: 'OFF' } };
     const v = motionBlurVisual(rig, P(), 1000, 6);
     expect(v).toEqual({ mode: 'OFF', direction: [0, 0], lengthPx: 0, samples: 1, rollingSkew: 0 });
   });
@@ -143,7 +143,7 @@ describe('motionBlurVisual (IMG-002, IMG-003)', () => {
   });
 
   it('TEMPORAL_ACCUMULATION uses the rig sample count', () => {
-    const rig: CameraConfig = { ...TOP(), imageEffects: { ...TOP().imageEffects, motionBlur: 'TEMPORAL_ACCUMULATION', temporalSamples: 5 } };
+    const rig: AreaScanCameraConfig = { ...TOP(), imageEffects: { ...TOP().imageEffects, motionBlur: 'TEMPORAL_ACCUMULATION', temporalSamples: 5 } };
     const v = motionBlurVisual(rig, P(), 1000, 1);
     expect(v.samples).toBe(5);
   });
@@ -157,7 +157,7 @@ describe('motionBlurVisual (IMG-002, IMG-003)', () => {
   });
 
   it('rolling shutter adds a positive readout wedge (IMG-004)', () => {
-    const rig: CameraConfig = {
+    const rig: AreaScanCameraConfig = {
       ...TOP(),
       acquisition: { ...TOP().acquisition, shutter: 'ROLLING', rollingReadoutUs: 30000 },
     };
@@ -212,7 +212,7 @@ describe('labelMotionBlurPx (PIPE-003, §8.1 corner-based)', () => {
 
   /** Independent reference: per-corner image displacement, shutter open→closed. */
   function cornerDisps(
-    r: CameraConfig,
+    r: AreaScanCameraConfig,
     label: import('../domain/types').LabelInstance,
     p: ParcelState,
     speed: number,

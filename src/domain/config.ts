@@ -6,7 +6,7 @@
 import { defaultCameraRigs, defaultEffectToggles, validateCameraRigs } from './camera';
 import type { CameraConfig, MaterialPreset } from './types';
 
-export const CONFIG_VERSION = 2;
+export const CONFIG_VERSION = 3;
 
 /**
  * Width of the GAP transfer's bottom opening, mm (AC-05 / issue #8).
@@ -290,6 +290,7 @@ export function industrialReaderCameraPreset(
   quaternion: [number, number, number, number],
 ): CameraConfig {
   return {
+    kind: 'AREA_SCAN',
     id,
     name: `${role} industrial reader`,
     role,
@@ -333,4 +334,31 @@ export function industrialReaderCameraPreset(
     preview: { widthPx: 960, heightPx: 540, overlay: true },
     enabled: true,
   };
+}
+
+/**
+ * Migrate a parsed config from any supported legacy version to the
+ * latest shape (CFG-007). v2 → v3: line scanners did not exist in v2, so
+ * every rig becomes an area scanner — add `kind: 'AREA_SCAN'` (only if
+ * absent) and bump the version. Returns null for non-objects or
+ * unsupported versions; the caller then reports the original version
+ * error.
+ */
+export function migrateConfigToLatest(raw: unknown): SimConfig | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const cfg = { ...(raw as Record<string, unknown>) };
+  const version = cfg.version;
+  if (version === CONFIG_VERSION) return cfg as unknown as SimConfig;
+  if (version === 2) {
+    const rigs = (cfg.cameraRigs as unknown[] | undefined) ?? [];
+    cfg.cameraRigs = rigs.map((r) =>
+      typeof r === 'object' && r !== null && !('kind' in (r as Record<string, unknown>))
+        ? { kind: 'AREA_SCAN', ...(r as Record<string, unknown>) }
+        : r,
+    );
+  } else {
+    return null;
+  }
+  cfg.version = CONFIG_VERSION;
+  return cfg as unknown as SimConfig;
 }

@@ -11,7 +11,13 @@
  */
 
 import type { ConfigError } from './config';
-import type { CameraConfig, CameraState } from './types';
+import type {
+  AreaScanCameraConfig,
+  CameraConfig,
+  CameraRole,
+  CameraState,
+  LineScanCameraConfig,
+} from './types';
 
 // ---------------------------------------------------------------------------
 // Minimal vector/quaternion math (domain stays THREE-free).
@@ -154,8 +160,17 @@ export interface StationGeometry {
 
 const STATION_CENTER_Z = (len: number) => len / 2;
 
+/** Kind guards for the v3 discriminated union (CFG-007). */
+export function isAreaScan(rig: CameraConfig): rig is AreaScanCameraConfig {
+  return rig.kind === 'AREA_SCAN';
+}
+
+export function isLineScan(rig: CameraConfig): rig is LineScanCameraConfig {
+  return rig.kind === 'LINE_SCAN';
+}
+
 /** All effects on (IMG-012); presets flip individual switches. */
-export function defaultEffectToggles(): CameraConfig['imageEffects']['toggles'] {
+export function defaultEffectToggles(): AreaScanCameraConfig['imageEffects']['toggles'] {
   return {
     motionBlur: true,
     focus: true,
@@ -181,7 +196,7 @@ export function defaultCameraRigs(
     fps: number;
     shutter: 'GLOBAL' | 'ROLLING';
   },
-): CameraConfig[] {
+): AreaScanCameraConfig[] {
   const cz = STATION_CENTER_Z(station.lengthMm);
   const poses: { role: CameraConfig['role']; eye: V3; target: V3 }[] = [
     { role: 'FRONT', eye: [0, 1200, -900], target: [0, 0, 600] },
@@ -195,6 +210,7 @@ export function defaultCameraRigs(
   ];
 
   return poses.map((p, i) => ({
+    kind: 'AREA_SCAN' as const,
     id: `CAM-${String(i + 1).padStart(3, '0')}`,
     name: `${p.role} reader`,
     role: p.role,
@@ -243,6 +259,52 @@ export function defaultCameraRigs(
   }));
 }
 
+/**
+ * A line-scan rig with demo-assumption defaults (v3, LINE_SCAN). The
+ * 8192 px × 512 mm line gives a 0.0625 mm pixel pitch across a 650 mm
+ * belt; 0.1 mm/line encoder step gives ~4 travel lines per 0.4 mm module
+ * (clears the default ppmMin 2.0); the 12 k lines/s ceiling saturates at
+ * 1.2 m/s, so 1.5 m/s intentionally undersamples (LOW_PPM by design).
+ */
+export function defaultLineScanRig(
+  id: string,
+  role: CameraRole,
+  positionMm: V3,
+  quaternion: Quat,
+  scanPlaneZMm: number,
+  overrides?: Partial<LineScanCameraConfig['line']>,
+): LineScanCameraConfig {
+  return {
+    kind: 'LINE_SCAN',
+    id,
+    name: `${role} line scanner`,
+    role,
+    pose: { positionMm, quaternion },
+    line: {
+      pixelsPerLine: 8192,
+      sensorWidthMm: 512,
+      encoderStepMmPerLine: 0.1,
+      maxLineRateLinesPerSec: 12000,
+      maxStripLengthMm: 5000,
+      scanPlaneZMm,
+      lineExposureUs: 100,
+      ...overrides,
+    },
+    illumination: {
+      intensity: 1.0,
+      polarized: true,
+      ambientLeak: 0.05,
+    },
+    imageEffects: {
+      jitter: 0,
+      missingLineChance: 0,
+      banding: 0,
+    },
+    preview: { widthPx: 1280, heightPx: 720, overlay: true },
+    enabled: true,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Intrinsics & projection (CAM-003).
 
@@ -260,7 +322,9 @@ export interface PinholeIntrinsics {
   cy: number;
 }
 
-export function sensorIntrinsics(s: CameraConfig['sensor']): PinholeIntrinsics {
+export function sensorIntrinsics(
+  s: AreaScanCameraConfig['sensor'],
+): PinholeIntrinsics {
   const pixelPitchMm = s.filmGaugeMm / s.widthPx;
   const sensorHeightMm = s.heightPx * pixelPitchMm;
   const fovYDeg =
@@ -280,7 +344,7 @@ export function sensorIntrinsics(s: CameraConfig['sensor']): PinholeIntrinsics {
   };
 }
 
-/** World→camera transform: p_cam = R⁻¹(p − t). */
+/** World→camera transform: p_cam = R⁻¹(p − t). Pose-only (both kinds). */
 export function toCameraSpace(p: V3, cfg: CameraConfig): V3 {
   const t = cfg.pose.positionMm;
   const rel: V3 = [p[0] - t[0], p[1] - t[1], p[2] - t[2]];
@@ -293,7 +357,7 @@ export function toCameraSpace(p: V3, cfg: CameraConfig): V3 {
  */
 export function projectPointMm(
   p: V3,
-  cfg: CameraConfig,
+  cfg: AreaScanCameraConfig,
 ): { xPx: number; yPx: number; zMm: number } | null {
   const intr = sensorIntrinsics(cfg.sensor);
   const cam = toCameraSpace(p, cfg);
@@ -312,7 +376,7 @@ export function projectPointMm(
 }
 
 /** The eight frustum corners (near×4 then far×4) in world mm. */
-export function frustumCornersMm(cfg: CameraConfig): V3[] {
+export function frustumCornersMm(cfg: AreaScanCameraConfig): V3[] {
   const intr = sensorIntrinsics(cfg.sensor);
   const halfW = (cfg.sensor.widthPx / 2) * intr.pixelPitchMm;
   const halfH = (cfg.sensor.heightPx / 2) * intr.pixelPitchMm;
@@ -487,6 +551,32 @@ export function validateCameraRigs(rigs: CameraConfig[]): ConfigError[] {
     seen.add(r.id);
     if (!r.name) errors.push({ path: p('name'), message: 'must not be empty' });
 
+    const pos = r.pose.positionMm;
+    for (const [k, v] of pos.entries()) {
+      if (!Number.isFinite(v)) errors.push({ path: p(`pose.positionMm[${k}]`), message: 'must be finite' });
+    }
+    const qn = Math.hypot(
+      r.pose.quaternion[0],
+      r.pose.quaternion[1],
+      r.pose.quaternion[2],
+      r.pose.quaternion[3],
+    );
+    if (qn < 0.9 || qn > 1.1) {
+      errors.push({ path: p('pose.quaternion'), message: 'must be normalized' });
+    }
+    num(r.preview.widthPx, p('preview.widthPx'), 16, 4096);
+    num(r.preview.heightPx, p('preview.heightPx'), 16, 4096);
+
+    if (r.kind !== 'AREA_SCAN' && r.kind !== 'LINE_SCAN') {
+      errors.push({
+        path: p('kind'),
+        message: "must be 'AREA_SCAN' or 'LINE_SCAN'",
+      });
+      return;
+    }
+
+    if (r.kind === 'AREA_SCAN') {
+
     num(r.sensor.widthPx, p('sensor.widthPx'), 64, 12000);
     num(r.sensor.heightPx, p('sensor.heightPx'), 64, 12000);
     num(r.sensor.focalLengthMm, p('sensor.focalLengthMm'), 2, 120);
@@ -523,9 +613,6 @@ export function validateCameraRigs(rigs: CameraConfig[]): ConfigError[] {
     num(r.optics.apertureProxy, p('optics.apertureProxy'), 0.5, 22);
     num(r.optics.vignetting, p('optics.vignetting'), 0, 1);
 
-    num(r.preview.widthPx, p('preview.widthPx'), 16, 4096);
-    num(r.preview.heightPx, p('preview.heightPx'), 16, 4096);
-
     num(r.imageEffects.temporalSamples, p('imageEffects.temporalSamples'), 2, 32);
     num(r.imageEffects.shotNoise, p('imageEffects.shotNoise'), 0, 1);
     num(r.imageEffects.readNoise, p('imageEffects.readNoise'), 0, 1);
@@ -554,18 +641,26 @@ export function validateCameraRigs(rigs: CameraConfig[]): ConfigError[] {
       }
     }
 
-    const pos = r.pose.positionMm;
-    for (const [k, v] of pos.entries()) {
-      if (!Number.isFinite(v)) errors.push({ path: p(`pose.positionMm[${k}]`), message: 'must be finite' });
-    }
-    const qn = Math.hypot(
-      r.pose.quaternion[0],
-      r.pose.quaternion[1],
-      r.pose.quaternion[2],
-      r.pose.quaternion[3],
-    );
-    if (qn < 0.9 || qn > 1.1) {
-      errors.push({ path: p('pose.quaternion'), message: 'must be normalized' });
+    } else {
+      // Area-only blocks are invalid on line rigs (v2 leak / bad import).
+      const extra = (['sensor', 'acquisition', 'optics'] as const).filter(
+        (k) => k in (r as CameraConfig),
+      );
+      for (const k of extra) {
+        errors.push({ path: p(k), message: 'is not allowed on LINE_SCAN rigs' });
+      }
+      num(r.line.pixelsPerLine, p('line.pixelsPerLine'), 64, 65536);
+      num(r.line.sensorWidthMm, p('line.sensorWidthMm'), 50, 2000);
+      num(r.line.encoderStepMmPerLine, p('line.encoderStepMmPerLine'), 0.01, 10);
+      num(r.line.maxLineRateLinesPerSec, p('line.maxLineRateLinesPerSec'), 100, 100000);
+      num(r.line.maxStripLengthMm, p('line.maxStripLengthMm'), 10, 20000);
+      num(r.line.scanPlaneZMm, p('line.scanPlaneZMm'), 0, 10000);
+      num(r.line.lineExposureUs, p('line.lineExposureUs'), 1, 100000);
+      num(r.illumination.intensity, p('illumination.intensity'), 0, 2);
+      num(r.illumination.ambientLeak, p('illumination.ambientLeak'), 0, 1);
+      num(r.imageEffects.jitter, p('imageEffects.jitter'), 0, 1);
+      num(r.imageEffects.missingLineChance, p('imageEffects.missingLineChance'), 0, 1);
+      num(r.imageEffects.banding, p('imageEffects.banding'), 0, 1);
     }
   });
 

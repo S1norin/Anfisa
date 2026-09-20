@@ -16,7 +16,7 @@
  */
 
 import { sensorIntrinsics, toCameraSpace } from '../domain/camera';
-import type { CameraConfig, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, ParcelState } from '../domain/types';
 import {
   effectiveExposureS,
   parcelMotionBlurPx,
@@ -54,7 +54,7 @@ export interface ExposureMetrics {
  * below 0.5 the frame is underexposed, fully at 0.
  */
 export function exposureMetrics(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   illuminationFactor = 1,
 ): ExposureMetrics {
   const exposureFactor = rig.acquisition.exposureUs / NOMINAL_EXPOSURE_US;
@@ -90,13 +90,13 @@ export function exposureMetrics(
  * 16 mm lens focused at meter scale (that is the DOF behaviour).
  */
 /** Defocus with the rig's own focal length (derived from intrinsics). */
-export function defocusPx(rig: CameraConfig, distanceMm: number): number {
+export function defocusPx(rig: AreaScanCameraConfig, distanceMm: number): number {
   return defocusPxWithFocal(rig, distanceMm, rigOpticalFocalMm(rig));
 }
 
 /** Same as `defocusPx` but with an explicit focal length (testable). */
 export function defocusPxWithFocal(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   distanceMm: number,
   focalMm: number,
 ): number {
@@ -123,7 +123,7 @@ export function defocusPxWithFocal(
  * the highlight (≈ ×0.5, documented approximation).
  */
 export function parcelGlareIndex(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   parcel: ParcelState,
 ): number {
   if (!parcel.spec.tape) return 0;
@@ -159,7 +159,7 @@ export function parcelCentreWorldMm(p: ParcelState): [number, number, number] {
 
 /** Strongest glare among the candidate parcels of a frame. */
 export function frameGlareIndex(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   parcels: ParcelState[],
 ): number {
   let max = 0;
@@ -240,7 +240,7 @@ export interface FrameArtifacts {
  * artifacts, exposure/noise/lens still apply).
  */
 function nearestParcel(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   parcels: ParcelState[],
 ): ParcelState | null {
   if (parcels.length === 0) return null;
@@ -272,7 +272,7 @@ function nearestParcel(
  * @param illuminationFactor per-frame light multiplier (flicker), 1 = steady
  */
 export function frameArtifacts(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   candidates: ParcelState[],
   speedMmPerSec: number,
   frameId: string,
@@ -316,7 +316,7 @@ export function frameArtifacts(
     previewMode === 'AMPLIFIED'
       ? rig.imageEffects.artifactAmplification
       : 1;
-  const on = (key: keyof CameraConfig['imageEffects']['toggles']) =>
+  const on = (key: keyof AreaScanCameraConfig['imageEffects']['toggles']) =>
     previewMode === 'CLEAN' ? false : rig.imageEffects.toggles[key];
 
   const blurOn = on('motionBlur') && rig.imageEffects.motionBlur !== 'OFF';
@@ -361,7 +361,7 @@ export function frameArtifacts(
 }
 
 /** Effective exposure window in seconds (re-exported for the quality model). */
-export function effectiveExposureWindowS(rig: CameraConfig): number {
+export function effectiveExposureWindowS(rig: AreaScanCameraConfig): number {
   return effectiveExposureS(rig);
 }
 
@@ -371,7 +371,7 @@ export function effectiveExposureWindowS(rig: CameraConfig): number {
  * baked into the intrinsics); rig-level callers pass it explicitly via
  * `defocusPxWithFocal` when they know it.
  */
-export function rigOpticalFocalMm(rig: CameraConfig): number {
+export function rigOpticalFocalMm(rig: AreaScanCameraConfig): number {
   // Derive focal from intrinsics + sensor pitch: fx = f / pitch.
   const pitch = rig.sensor.filmGaugeMm / rig.sensor.widthPx;
   return sensorIntrinsics(rig.sensor).fx * pitch;

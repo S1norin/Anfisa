@@ -14,7 +14,7 @@
 
 import { sensorIntrinsics, toCameraSpace } from '../domain/camera';
 import { degToRad } from '../domain/units';
-import type { CameraConfig, Face, LabelInstance, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, Face, LabelInstance, ParcelState } from '../domain/types';
 
 export type V3 = [number, number, number];
 
@@ -156,7 +156,7 @@ export interface ProjectedLabel {
  * sensor grid is what the decoder sees; ROI belongs to later processing).
  */
 export function projectLabelMm(
-  rig: CameraConfig,
+  rig: AreaScanCameraConfig,
   label: LabelInstance,
   parcel: ParcelState,
 ): ProjectedLabel {

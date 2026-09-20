@@ -6,7 +6,7 @@
 
 import { defaultCameraRigs } from '../domain/camera';
 import { defaultConfig } from '../domain/config';
-import type { CameraConfig, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, CameraConfig, ParcelState } from '../domain/types';
 import {
   dimensionLines,
   focusPlaneCorners,
@@ -37,8 +37,8 @@ function config(): ReturnType<typeof defaultConfig> {
   return cfg;
 }
 
-function rig(role: string): CameraConfig {
-  return config().cameraRigs.find((r) => r.role === role)!;
+function rig(role: string): AreaScanCameraConfig {
+  return config().cameraRigs.find((r): r is AreaScanCameraConfig => r.role === role)!;
 }
 
 function makeParcel(over: Partial<ParcelState> = {}): ParcelState {
@@ -129,7 +129,7 @@ describe('scan zones, optical axes, focus planes', () => {
     const zones = scanZones(cfg.cameraRigs);
     expect(zones).toHaveLength(cfg.cameraRigs.length);
     for (const zone of zones) {
-      const r = cfg.cameraRigs.find((x) => x.id === zone.rigId)!;
+      const r = cfg.cameraRigs.find((x) => x.id === zone.rigId)! as AreaScanCameraConfig;
       const d = r.acquisition.focusDistanceMm;
       // Zone centre = camera + fwd·d/2 (fwd from the pose quaternion, so
       // oblique rigs are covered by the distance invariant).

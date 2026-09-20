@@ -3,7 +3,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { degToRad, mmToM } from '../domain/units';
-import type { CameraState, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, CameraState, ParcelState } from '../domain/types';
 import type { SimConfig } from '../domain/config';
 import { defaultConfig } from '../domain/config';
 import { CameraRigScene, cameraRigToPerspective } from './cameraRig';
@@ -65,7 +65,8 @@ function RigViewCamera({ rig }: { rig: SimConfig['cameraRigs'][number] }) {
   const size = useThree((state) => state.size);
 
   const camera = useMemo(() => {
-    const next = cameraRigToPerspective(rig);
+    // Area-rig viewport (line-scan rigs have no frustum camera; t10).
+    const next = cameraRigToPerspective(rig as AreaScanCameraConfig);
     // The lab viewport follows its available size. In the normal desktop
     // layout this matches the configured 16:9 preview, while remaining
     // usable on narrower screens.

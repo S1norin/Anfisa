@@ -8,14 +8,19 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { frustumCornersMm, sensorIntrinsics } from '../domain/camera';
-import type { CameraConfig, CameraState } from '../domain/types';
+import type {
+  AreaScanCameraConfig,
+  CameraConfig,
+  CameraState,
+  LineScanCameraConfig,
+} from '../domain/types';
 import { FrustumLines } from './frustumHelper';
 
 /** Millimetres → metres (render boundary only). */
 const MM = 0.001;
 
 /** Build the PerspectiveCamera that a rig's intrinsics imply (CAM-003). */
-export function cameraRigToPerspective(cfg: CameraConfig): THREE.PerspectiveCamera {
+export function cameraRigToPerspective(cfg: AreaScanCameraConfig): THREE.PerspectiveCamera {
   const intr = sensorIntrinsics(cfg.sensor);
   const cam = new THREE.PerspectiveCamera(
     intr.fovYDeg,
@@ -67,45 +72,83 @@ function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
   const p = rig.pose.positionMm;
   const q = rig.pose.quaternion;
   const color = STATE_COLORS[state];
+  const isArea = rig.kind === 'AREA_SCAN';
 
   const cornersM = useMemo(
     () =>
-      frustumCornersMm(rig).map(
-        (c) => [c[0] * MM, c[1] * MM, c[2] * MM] as [number, number, number],
-      ),
-    [rig],
+      isArea
+        ? frustumCornersMm(rig).map(
+            (c) => [c[0] * MM, c[1] * MM, c[2] * MM] as [number, number, number],
+          )
+        : null,
+    [rig, isArea],
   );
 
+  const select = (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    onSelect(rig.id);
+  };
+
   return (
-    <group
-      position={[p[0] * MM, p[1] * MM, p[2] * MM]}
-      quaternion={[q[0], q[1], q[2], q[3]]}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(rig.id);
-      }}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        document.body.style.cursor = 'pointer';
-      }}
-      onPointerOut={() => {
-        document.body.style.cursor = 'auto';
-      }}
-    >
-      <mesh geometry={body}>
-        <meshStandardMaterial
-          color="#2f3640"
-          metalness={0.6}
-          roughness={0.4}
-          emissive={selected ? '#ffb84f' : '#000000'}
-          emissiveIntensity={selected ? 0.45 : 0}
-        />
-      </mesh>
-      <mesh geometry={lens} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.038]}>
-        <meshStandardMaterial color="#111827" metalness={0.3} roughness={0.2} />
-      </mesh>
-      <FrustumLines cornersM={cornersM} color={color} opacity={rig.enabled ? 0.6 : 0.2} />
+    <group>
+      <group
+        position={[p[0] * MM, p[1] * MM, p[2] * MM]}
+        quaternion={[q[0], q[1], q[2], q[3]]}
+        onClick={select}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = 'pointer';
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = 'auto';
+        }}
+      >
+        <mesh geometry={body}>
+          <meshStandardMaterial
+            color="#2f3640"
+            metalness={0.6}
+            roughness={0.4}
+            emissive={selected ? '#ffb84f' : '#000000'}
+            emissiveIntensity={selected ? 0.45 : 0}
+          />
+        </mesh>
+        <mesh geometry={lens} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.038]}>
+          <meshStandardMaterial color="#111827" metalness={0.3} roughness={0.2} />
+        </mesh>
+        {cornersM && (
+          <FrustumLines cornersM={cornersM} color={color} opacity={rig.enabled ? 0.6 : 0.2} />
+        )}
+      </group>
+      {/* Line scanners: world-space scan plane at the encoder-synced Z. */}
+      {!isArea && (
+        <LineScanPlaneMarker rig={rig as LineScanCameraConfig} stateColor={color} onSelect={select} />
+      )}
     </group>
+  );
+}
+
+/** Thin plane marking the line scanner's scan Z (world space, belt-normal). */
+function LineScanPlaneMarker({
+  rig,
+  stateColor,
+  onSelect,
+}: {
+  rig: LineScanCameraConfig;
+  stateColor: string;
+  onSelect: (e: { stopPropagation: () => void }) => void;
+}) {
+  const p = rig.pose.positionMm;
+  return (
+    <mesh position={[p[0] * MM, p[1] * MM, rig.line.scanPlaneZMm * MM]} onClick={onSelect}>
+      <boxGeometry args={[rig.line.sensorWidthMm * MM, 0.012, 0.004]} />
+      <meshStandardMaterial
+        color={stateColor}
+        emissive={stateColor}
+        emissiveIntensity={0.35}
+        transparent
+        opacity={rig.enabled ? 0.75 : 0.25}
+      />
+    </mesh>
   );
 }
 

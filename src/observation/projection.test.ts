@@ -6,7 +6,7 @@
 
 import { defaultCameraRigs } from '../domain/camera';
 import { defaultConfig } from '../domain/config';
-import type { CameraConfig, LabelInstance, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, LabelInstance, ParcelState } from '../domain/types';
 import {
   faceNormalWorldMm,
   labelCenterWorldMm,
@@ -26,7 +26,7 @@ const DEFAULTS = {
   shutter: 'GLOBAL' as const,
 };
 
-function rig(role: string): CameraConfig {
+function rig(role: string): AreaScanCameraConfig {
   return defaultCameraRigs(STATION, DEFAULTS).find((r) => r.role === role)!;
 }
 

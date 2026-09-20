@@ -30,6 +30,7 @@ import {
   PRESETS,
 } from '../../presets';
 import type {
+  AreaScanCameraConfig,
   CameraConfig,
   CameraState,
   ParcelState,
@@ -142,6 +143,14 @@ export function LabControls({
   const patch = (fn: (r: CameraConfig) => CameraConfig) => {
     if (!rig) return;
     applyRigs(rigs.map((r) => (r.id === rig.id ? fn(r) : r)));
+  };
+
+  /** Area-rig-only patches (sensor/acquisition/optics/illumination/effect params). */
+  const patchArea = (fn: (r: AreaScanCameraConfig) => AreaScanCameraConfig) => {
+    if (!rig || rig.kind !== 'AREA_SCAN') return;
+    applyRigs(
+      rigs.map((r) => (r.id === rig.id ? (fn(r as AreaScanCameraConfig) as CameraConfig) : r)),
+    );
   };
 
   /** Look target at the (stable) slant distance to the selected parcel. */
@@ -363,19 +372,21 @@ export function LabControls({
             </button>
           )}
 
+          {rig.kind === 'AREA_SCAN' ? (
+            <>
           <Section title="Sensor (focal is editable — vFOV is derived)">
             <Field
               label="Width px"
               value={rig.sensor.widthPx}
               onValue={(n) =>
-                patch((r) => ({ ...r, sensor: { ...r.sensor, widthPx: n } }))
+                patchArea((r) => ({ ...r, sensor: { ...r.sensor, widthPx: n } }))
               }
             />
             <Field
               label="Height px"
               value={rig.sensor.heightPx}
               onValue={(n) =>
-                patch((r) => ({ ...r, sensor: { ...r.sensor, heightPx: n } }))
+                patchArea((r) => ({ ...r, sensor: { ...r.sensor, heightPx: n } }))
               }
             />
             <Field
@@ -383,7 +394,7 @@ export function LabControls({
               value={rig.sensor.focalLengthMm}
               step={0.5}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   sensor: { ...r.sensor, focalLengthMm: n },
                 }))
@@ -399,7 +410,7 @@ export function LabControls({
               value={rig.sensor.filmGaugeMm}
               step={0.5}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   sensor: { ...r.sensor, filmGaugeMm: n },
                 }))
@@ -409,7 +420,7 @@ export function LabControls({
               label="Near mm"
               value={rig.sensor.nearMm}
               onValue={(n) =>
-                patch((r) => ({ ...r, sensor: { ...r.sensor, nearMm: n } }))
+                patchArea((r) => ({ ...r, sensor: { ...r.sensor, nearMm: n } }))
               }
             />
             <Field
@@ -417,7 +428,7 @@ export function LabControls({
               value={rig.sensor.farMm}
               step={10}
               onValue={(n) =>
-                patch((r) => ({ ...r, sensor: { ...r.sensor, farMm: n } }))
+                patchArea((r) => ({ ...r, sensor: { ...r.sensor, farMm: n } }))
               }
             />
           </Section>
@@ -426,7 +437,7 @@ export function LabControls({
             <button
               type="button"
               data-testid="lab-roi-clear"
-              onClick={() => patch((r) => ({ ...r, sensor: { ...r.sensor, roi: undefined } }))}
+              onClick={() => patchArea((r) => ({ ...r, sensor: { ...r.sensor, roi: undefined } }))}
             >
               Clear ROI
             </button>
@@ -437,7 +448,7 @@ export function LabControls({
               label="FPS"
               value={rig.acquisition.fps}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   acquisition: { ...r.acquisition, fps: n },
                 }))
@@ -448,7 +459,7 @@ export function LabControls({
               value={rig.acquisition.exposureUs}
               step={100}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   acquisition: { ...r.acquisition, exposureUs: n },
                 }))
@@ -459,7 +470,7 @@ export function LabControls({
               value={rig.acquisition.gainDb}
               step={1}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   acquisition: { ...r.acquisition, gainDb: n },
                 }))
@@ -470,7 +481,7 @@ export function LabControls({
               value={rig.acquisition.focusDistanceMm}
               step={10}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   acquisition: { ...r.acquisition, focusDistanceMm: n },
                 }))
@@ -481,7 +492,7 @@ export function LabControls({
               <select
                 value={rig.acquisition.shutter}
                 onChange={(e) =>
-                  patch((r) => ({
+                  patchArea((r) => ({
                     ...r,
                     acquisition: {
                       ...r.acquisition,
@@ -502,7 +513,7 @@ export function LabControls({
               value={rig.illumination.intensity}
               step={0.1}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   illumination: { ...r.illumination, intensity: n },
                 }))
@@ -513,7 +524,7 @@ export function LabControls({
               value={rig.illumination.strobeUs}
               step={10}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   illumination: { ...r.illumination, strobeUs: n },
                 }))
@@ -524,7 +535,7 @@ export function LabControls({
               value={rig.illumination.ambientLeak}
               step={0.05}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   illumination: { ...r.illumination, ambientLeak: n },
                 }))
@@ -535,7 +546,7 @@ export function LabControls({
                 type="checkbox"
                 checked={rig.illumination.polarized}
                 onChange={(e) =>
-                  patch((r) => ({
+                  patchArea((r) => ({
                     ...r,
                     illumination: {
                       ...r.illumination,
@@ -554,7 +565,7 @@ export function LabControls({
               value={rig.imageEffects.shotNoise}
               step={0.05}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   imageEffects: { ...r.imageEffects, shotNoise: n },
                 }))
@@ -565,7 +576,7 @@ export function LabControls({
               value={rig.imageEffects.readNoise}
               step={0.05}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   imageEffects: { ...r.imageEffects, readNoise: n },
                 }))
@@ -576,7 +587,7 @@ export function LabControls({
               value={rig.imageEffects.compression}
               step={0.05}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   imageEffects: { ...r.imageEffects, compression: n },
                 }))
@@ -587,13 +598,20 @@ export function LabControls({
               value={rig.optics.apertureProxy}
               step={0.5}
               onValue={(n) =>
-                patch((r) => ({
+                patchArea((r) => ({
                   ...r,
                   optics: { ...r.optics, apertureProxy: n },
                 }))
               }
             />
           </Section>
+            </>
+          ) : (
+            <p className="cam-section">
+              Line-scan rig — line fields (sensor width, encoder step, scan
+              plane, line rate) are editable in t10.
+            </p>
+          )}
 
           <Section title="Preview">
             <Field
