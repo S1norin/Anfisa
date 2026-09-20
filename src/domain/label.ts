@@ -145,7 +145,7 @@ export function generateLabels(ctx: LabelGenContext): LabelInstance[] {
       rotationDeg: placement.rotationDeg,
       widthMm: cfg.barcode.labelWidthMm,
       heightMm: cfg.barcode.labelHeightMm,
-      damage: labelDamageValue(rng),
+      damage: labelDamageValue(rng, cfg.parcel.labelDamageChance),
     });
   }
 

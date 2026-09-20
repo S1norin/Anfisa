@@ -195,4 +195,12 @@ export class ParcelPipeline {
   resultFor(parcelId: string): ParcelResult | undefined {
     return this.results.find((r) => r.parcelId === parcelId);
   }
+
+  /**
+   * The aggregate for a parcel (MET-004/MET-005 metrics). Undefined when
+   * the parcel produced no attributed observations.
+   */
+  aggregateFor(parcelId: string): ParcelAggregate | undefined {
+    return this.stats.get(parcelId)?.aggregate;
+  }
 }

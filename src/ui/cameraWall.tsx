@@ -3,10 +3,15 @@ import { simStore, useSim } from '../store/simStore';
 import type { CameraConfig, CameraState } from '../domain/types';
 
 /**
- * Camera feed wall (CAM-008, issue #6): one tile per camera showing
- * cameraId, state, frame age, visible parcel ids, decoded count, and
- * warning state. Metadata-only (NFR-002: textures are display-only; the
- * feed shows what the capture pipeline knows, not decoded pixels).
+ * Camera feed wall (CAM-008, issue #6, live in issue #11): one tile per
+ * camera showing cameraId, state, frame age, visible parcel ids, decoded
+ * count, and warning state. Metadata-only (NFR-002: textures are
+ * display-only; the feed shows what the capture pipeline knows, not
+ * decoded pixels).
+ *
+ * The decoded count comes from the LIVE pipeline's observation log
+ * (same data the result card and metrics use), keyed by camera + capture
+ * sim time — the display-only frame buffer itself carries no labels.
  */
 
 const STALE_AFTER_MS = 1000;
@@ -15,13 +20,14 @@ interface TileProps {
   rig: CameraConfig;
   state: CameraState | undefined;
   simTimeMs: number;
+  decodedByFrame: ReadonlyMap<string, number>;
 }
 
-function CameraTile({ rig, state, simTimeMs }: TileProps) {
+function CameraTile({ rig, state, simTimeMs, decodedByFrame }: TileProps) {
   const latest = frameBuffer.latest(rig.id);
   const ageMs = latest ? simTimeMs - latest.simTimeMs : null;
   const decoded = latest
-    ? latest.labels.filter((l) => l.decodedPayload).length
+    ? decodedByFrame.get(`${rig.id}@${latest.simTimeMs}`) ?? 0
     : 0;
 
   const warnings: string[] = [];
@@ -84,6 +90,17 @@ export function CameraWall() {
   const sim = useSim();
   const { config, cameraStates, simTimeMs } = sim.state;
 
+  // Rebuilt on every render (this component re-renders on each sim tick):
+  // liveObservations is a stable, in-place-mutated array, so a memo keyed on
+  // its reference would never invalidate.
+  const observations = simStore.liveObservations;
+  const decodedByFrame = new Map<string, number>();
+  for (const o of observations) {
+    if (!o.decoded) continue;
+    const key = `${o.cameraId}@${o.simTimeMs}`;
+    decodedByFrame.set(key, (decodedByFrame.get(key) ?? 0) + 1);
+  }
+
   return (
     <div className="camera-wall" data-testid="camera-wall">
       {config.cameraRigs.map((rig) => (
@@ -92,6 +109,7 @@ export function CameraWall() {
           rig={rig}
           state={cameraStates[rig.id]}
           simTimeMs={simTimeMs}
+          decodedByFrame={decodedByFrame}
         />
       ))}
     </div>

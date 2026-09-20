@@ -57,6 +57,8 @@ export interface SimConfig {
     yawDeg: number;
     /** Per-parcel probability of a glossy tape strip (PAR-001). */
     tapeChance: number;
+    /** Per-label probability of print damage (PAR-007, IMG-010). */
+    labelDamageChance: number;
   };
   station: {
     lengthMm: number;
@@ -130,6 +132,7 @@ export function defaultConfig(): SimConfig {
       lateralOffsetMm: 0,
       yawDeg: 0,
       tapeChance: 0.3,
+      labelDamageChance: 0.15,
     },
     station: {
       lengthMm: 2200,
@@ -228,6 +231,7 @@ export function validateConfig(cfg: SimConfig): ConfigError[] {
     });
   }
   num(cfg.parcel.tapeChance, 'parcel.tapeChance', 0, 1);
+  num(cfg.parcel.labelDamageChance, 'parcel.labelDamageChance', 0, 1);
   num(cfg.barcode.duplicatePayloadChance, 'barcode.duplicatePayloadChance', 0, 1);
   num(cfg.station.lengthMm, 'station.lengthMm', 500, 10000);
   num(cfg.station.sortDistanceMm, 'station.sortDistanceMm', 0, 3000);
