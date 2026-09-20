@@ -514,9 +514,12 @@ body {
   padding: 6px 8px;
 }
 
+/* Responsive to any reader count: min(215px, 100%) lets tiles shrink on
+   narrow containers, so the grid reflows (4×2 at 8 readers on a
+   presentation viewport) instead of overflowing horizontally. */
 .camera-wall {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr));
   gap: 10px;
 }
 
@@ -575,6 +578,25 @@ body {
   margin-left: auto;
   font-size: 0.75em;
   padding: 2px 9px;
+}
+
+.cam-tile-caption {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8em;
+  color: var(--text-dim);
+}
+
+.cam-tile-kind {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+  padding: 0 6px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--muted);
 }
 
 .cam-tile-data {

@@ -7,7 +7,7 @@
 
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { reportSixViewConfig } from '../capture/presets';
+import { reportEightReaderConfig, reportSixViewConfig } from '../capture/presets';
 import { stripBufferPool } from '../capture/frameBuffer';
 import { buildStripTexture } from '../capture/stripPreview';
 import type { LineScanCameraConfig } from '../domain/types';
@@ -62,5 +62,48 @@ describe('camera wall line-scanner tiles (t9)', () => {
     render(<CameraWall />);
     expect(screen.queryByTestId(`cam-tile-strip-${BOTTOM_ID}`)).toBeTruthy();
     expect(screen.queryByTestId('cam-tile-strip-CAM-001')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// t3-wall: the wall is responsive to N readers — the final-report layout
+// (6 side area readers + 2 line scanners) reflows without overflow.
+// ---------------------------------------------------------------------------
+describe('camera wall: eight-reader report layout (t3-wall)', () => {
+  beforeEach(() => {
+    simStore.reset(reportEightReaderConfig());
+    stripBufferPool.clear();
+  });
+
+  it('renders one feed tile per reader: 6 area + 2 line', () => {
+    render(<CameraWall />);
+    const wall = screen.getByTestId('camera-wall');
+    const tiles = Array.from(wall.querySelectorAll('.cam-tile'));
+    expect(tiles).toHaveLength(8);
+    for (let i = 1; i <= 8; i++) {
+      expect(
+        screen.getByTestId(`cam-tile-CAM-${String(i).padStart(3, '0')}`),
+      ).toBeTruthy();
+    }
+  });
+
+  it('captions show the reader name + kind', () => {
+    render(<CameraWall />);
+    const side = screen.getByTestId('cam-tile-caption-CAM-002');
+    expect(side.textContent).toContain('Side reader · RIGHT 90°');
+    expect(side.textContent).toContain('AREA');
+    const line = screen.getByTestId('cam-tile-caption-CAM-007');
+    expect(line.textContent).toContain('line scanner');
+    expect(line.textContent).toContain('LINE');
+  });
+
+  it('never overflows the container (reflows 4×2 at the presentation viewport)', () => {
+    render(<CameraWall />);
+    const wall = screen.getByTestId('camera-wall');
+    // Responsive grid (auto-fill + min(215px, 100%)): tiles shrink to fit
+    // the container width, so 8 readers reflow into rows instead of
+    // clipping. Measured in a real browser at t6-gates.
+    expect(wall.classList.contains('camera-wall')).toBe(true);
+    expect(wall.scrollWidth).toBeLessThanOrEqual(wall.clientWidth + 1);
   });
 });

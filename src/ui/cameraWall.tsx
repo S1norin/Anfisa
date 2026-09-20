@@ -76,6 +76,21 @@ function CameraTile({ rig, state, simTimeMs, decodedByFrame }: TileProps) {
           {state === 'FAULT' ? 'Clear' : 'Fault'}
         </button>
       </header>
+      <p
+        className="cam-tile-caption"
+        data-testid={`cam-tile-caption-${rig.id}`}
+      >
+        <span className="cam-tile-name">{rig.name}</span>
+        <span
+          className={
+            rig.kind === 'AREA_SCAN'
+              ? 'cam-tile-kind kind-area'
+              : 'cam-tile-kind kind-line'
+          }
+        >
+          {rig.kind === 'AREA_SCAN' ? 'AREA' : 'LINE'}
+        </span>
+      </p>
       <dl className="cam-tile-data">
         <div>
           <dt>Frame age</dt>
