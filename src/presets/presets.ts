@@ -20,7 +20,7 @@ import {
   reportSixViewConfig,
 } from '../capture/presets';
 import { defaultConfig, validateConfig, type SimConfig } from '../domain/config';
-import type { AreaScanCameraConfig, CameraConfig, CameraRole } from '../domain/types';
+import type { CameraConfig, CameraRole } from '../domain/types';
 import type { SimStore } from '../store/simStore';
 
 export const DEFAULT_PRESET_SEED = 2026;
@@ -130,31 +130,45 @@ export const PRESETS: readonly PresetDef[] = [
     id: 'glare-stress',
     name: 'Glare stress',
     description:
-      'Glossy tape on every parcel, unpolarized wide-open readers, high ambient leak: the glare component drives NO_READs.',
+      'Report layout with glossy tape on every parcel, unpolarized wide-open area readers, and high ambient leak on every light (area and line): the glare component drives NO_READs.',
     category: 'STRESS',
     build: (seed = DEFAULT_PRESET_SEED) => {
-      const cfg = recommendedSixViewConfig();
+      const cfg = reportSixViewConfig();
       cfg.seed = seed;
       cfg.parcel.material = 'WHITE_CARD';
       cfg.parcel.tapeChance = 1;
       cfg.parcel.labelDamageChance = 0;
-      // All area-scan rigs in this preset; line-scan variants land in t2.
-      cfg.cameraRigs = (cfg.cameraRigs as AreaScanCameraConfig[]).map((r) => ({
-        ...r,
-        illumination: {
-          ...r.illumination,
-          polarized: false,
-          ambientLeak: 0.7,
-          intensity: 1.2,
-        },
-        optics: { ...r.optics, apertureProxy: 2.8 },
-        imageEffects: {
-          ...r.imageEffects,
-          shotNoise: 0.3,
-          readNoise: 0.1,
-          compression: 0.2,
-        },
-      }));
+      cfg.cameraRigs = cfg.cameraRigs.map((r) => {
+        if (r.kind === 'LINE_SCAN') {
+          // Line rigs only carry an illumination block (no strobe, no
+          // optics): toggle the line lights only.
+          return {
+            ...r,
+            illumination: {
+              ...r.illumination,
+              polarized: false,
+              ambientLeak: 0.7,
+              intensity: 1.2,
+            },
+          };
+        }
+        return {
+          ...r,
+          illumination: {
+            ...r.illumination,
+            polarized: false,
+            ambientLeak: 0.7,
+            intensity: 1.2,
+          },
+          optics: { ...r.optics, apertureProxy: 2.8 },
+          imageEffects: {
+            ...r.imageEffects,
+            shotNoise: 0.3,
+            readNoise: 0.1,
+            compression: 0.2,
+          },
+        };
+      });
       return cfg;
     },
   },
@@ -175,10 +189,10 @@ export const PRESETS: readonly PresetDef[] = [
     id: 'camera-failure',
     name: 'Camera failure',
     description:
-      'Recommended 6-view with the TOP reader disabled in config: top-face labels are never captured, so top-face parcels can NO_READ.',
+      'Report layout with the TOP line scanner disabled in config: top-face labels are never captured, so top-face parcels can NO_READ.',
     category: 'FAILURE',
     build: (seed = DEFAULT_PRESET_SEED) => {
-      const cfg = recommendedSixViewConfig();
+      const cfg = reportSixViewConfig();
       cfg.seed = seed;
       cfg.cameraRigs = cfg.cameraRigs.map((r) =>
         r.role === 'TOP' ? { ...r, enabled: false, name: `${r.name} (offline)` } : r,
@@ -223,16 +237,17 @@ export interface FaultScenarioDef {
 export const FAULT_SCENARIOS: readonly FaultScenarioDef[] = [
   {
     id: 'rolling-shutter',
-    name: 'Rolling shutter (all readers)',
+    name: 'Rolling shutter (all area readers)',
     description:
-      'Switches every reader to ROLLING readout: temporal smear grows with belt speed (CAM-004/IMG-004).',
+      'Switches every area reader to ROLLING readout: temporal smear grows with belt speed (CAM-004/IMG-004). Line scanners are encoder-synced and have no shutter.',
     apply: (store) =>
       store.updateConfig((cfg) => ({
         ...cfg,
-        cameraRigs: (cfg.cameraRigs as AreaScanCameraConfig[]).map((r) => ({
-          ...r,
-          acquisition: { ...r.acquisition, shutter: 'ROLLING' as const },
-        })) as CameraConfig[],
+        cameraRigs: cfg.cameraRigs.map((r) =>
+          r.kind === 'AREA_SCAN'
+            ? { ...r, acquisition: { ...r.acquisition, shutter: 'ROLLING' as const } }
+            : r,
+        ),
       })),
   },
   {

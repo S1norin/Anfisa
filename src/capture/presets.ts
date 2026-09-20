@@ -18,7 +18,12 @@
  * every face scores quality 1.000 with ppmTarget 2.2 / focusPxTarget 2.0.
  */
 
-import { defaultCameraRigs, lookAtQuaternion, type StationGeometry } from '../domain/camera';
+import {
+  defaultCameraRigs,
+  defaultLineScanRig,
+  lookAtQuaternion,
+  type StationGeometry,
+} from '../domain/camera';
 import { defaultConfig, type SimConfig } from '../domain/config';
 import type { AreaScanCameraConfig } from '../domain/types';
 
@@ -111,8 +116,9 @@ export function recommendedSixViewConfig(): SimConfig {
 /**
  * Layout described in Report Draft.md: four horizontal side readers spaced
  * by 90 degrees and aimed obliquely (45 degrees to the parcel faces), plus
- * dedicated top and bottom readers. The report also specifies a 100 mm gap
- * between two conveyor sections for the bottom view.
+ * dedicated top and bottom readers. In config v3 the top/bottom readers are
+ * encoder-synced line scanners (LINE_SCAN). The report also specifies a 100
+ * mm gap between two conveyor sections for the bottom view.
  */
 export function reportSixViewConfig(): SimConfig {
   const cfg = defaultConfig();
@@ -169,39 +175,39 @@ export function reportSixViewConfig(): SimConfig {
     };
   };
 
-  const vertical = (role: 'TOP' | 'BOTTOM', eye: V3, target: V3) => {
-    const rig = by(role);
-    const aimed = aim(
-      {
-        ...rig,
-        sensor: {
-          ...rig.sensor,
-          widthPx: 5400,
-          heightPx: 4000,
-          focalLengthMm: 30,
-        },
-      },
-      eye,
-      target,
-    );
-    return {
-      ...aimed,
-      acquisition: { ...aimed.acquisition, exposureUs: 75 },
-      illumination: { ...aimed.illumination, strobeUs: 75 },
-    };
-  };
+  // TOP/BOTTOM are encoder-synced line scanners (v3 LINE_SCAN): a line
+  // sensor across the belt acquires one row per encoder step while a
+  // parcel crosses the scan plane. Preset assumptions (labelled, per the
+  // line-scan plan doc): 8192 px/line over a 512 mm line (0.0625 mm/
+  // pixel); 0.1 mm encoder step per line -> 4 travel lines per 0.4 mm
+  // module (clears the ppmMin 2.0 gate at rest); 12 000 lines/s ceiling
+  // -> saturated at 1.2 m/s, so 1.5 m/s intentionally undersamples
+  // (LOW_PPM by design). These are the defaultLineScanRig defaults.
+  const topEye: V3 = [0, cfg.parcel.heightMm + TOP_WORKING_DISTANCE_MM, centre[2]];
+  const bottomEye: V3 = [0, -TOP_WORKING_DISTANCE_MM, centre[2]];
 
   cfg.cameraRigs = [
     side('FRONT', 'FRONT-RIGHT 45° reader', diagonal, centre[2] + diagonal),
     side('REAR', 'REAR-LEFT 45° reader', -diagonal, centre[2] - diagonal),
     side('LEFT', 'FRONT-LEFT 45° reader', -diagonal, centre[2] + diagonal),
     side('RIGHT', 'REAR-RIGHT 45° reader', diagonal, centre[2] - diagonal),
-    vertical(
+    defaultLineScanRig(
+      'CAM-005',
       'TOP',
-      [0, cfg.parcel.heightMm + TOP_WORKING_DISTANCE_MM, centre[2]],
-      [0, cfg.parcel.heightMm, centre[2]],
+      topEye,
+      lookAtQuaternion(topEye, [0, cfg.parcel.heightMm, centre[2]]),
+      centre[2],
     ),
-    vertical('BOTTOM', [0, -TOP_WORKING_DISTANCE_MM, centre[2]], [0, 0, centre[2]]),
+    defaultLineScanRig(
+      'CAM-006',
+      'BOTTOM',
+      bottomEye,
+      lookAtQuaternion(bottomEye, [0, 0, centre[2]]),
+      // The BOTTOM scan plane sits at the GAP centre: the 100 mm transfer
+      // opening is centred on the station, so bottom strips are only
+      // useful while the parcel interval overlaps the gap.
+      centre[2],
+    ),
   ];
   cfg.station.bottomTransfer = 'GAP';
   cfg.barcode.xDimensionMm = 0.4;
