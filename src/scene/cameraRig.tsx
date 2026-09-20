@@ -19,6 +19,19 @@ import { FrustumLines } from './frustumHelper';
 /** Millimetres → metres (render boundary only). */
 const MM = 0.001;
 
+/**
+ * Area-rig layout (m): body + lens, the legacy CAM-001 shape. The lens
+ * sits on the optical front face (local -Z, matching the rendered
+ * half-turn applied in cameraRigToPerspective). Kept as a constant so
+ * the line-rig extension (t8) cannot silently change the area rendering.
+ */
+export const AREA_RIG_LAYOUT = {
+  bodyM: [0.09, 0.11, 0.06] as [number, number, number],
+  lensM: [0.02, 0.025, 0.02, 24] as [number, number, number, number],
+  lensPosM: [0, 0, -0.038] as [number, number, number],
+  meshCount: 2,
+} as const;
+
 /** Build the PerspectiveCamera that a rig's intrinsics imply (CAM-003). */
 export function cameraRigToPerspective(cfg: AreaScanCameraConfig): THREE.PerspectiveCamera {
   const intr = sensorIntrinsics(cfg.sensor);
@@ -51,6 +64,60 @@ const STATE_COLORS: Record<CameraState, string> = {
   FAULT: '#ff5c5c',
 };
 
+/** State → accent color, shared by area frusta and line markers (CAM-009). */
+export function rigStateColor(state: CameraState): string {
+  return STATE_COLORS[state];
+}
+
+/** Selection highlight, shared by area and line rigs. */
+export function selectionEmissive(selected: boolean): { color: string; intensity: number } {
+  return selected ? { color: '#ffb84f', intensity: 0.45 } : { color: '#000000', intensity: 0 };
+}
+
+/**
+ * Line-scan rig layout in metres (render boundary). The housing is long
+ * and narrow: its long axis is the sensor axis (local Y — line-scanner
+ * poses are built with the belt width in local Y, see lookAtQuaternion
+ * for the TOP/BOTTOM presets). The optical line marker sits on the
+ * optical front face (local -Z, same side as the area lens). The scan
+ * plane is a thin world-space slab at the encoder-synced scanPlaneZMm.
+ * Exactly three meshes, constant for any sensor/encoder settings —
+ * never one mesh per line.
+ */
+export interface LineRigLayout {
+  /** Housing size (m): [narrow, sensor width + margin, depth]. */
+  housingM: [number, number, number];
+  /** Optical line marker size (m), a thin strip along the sensor axis. */
+  lineMarkerM: [number, number, number];
+  /** Optical line marker position in the rig's local space (m). */
+  lineMarkerPosM: [number, number, number];
+  /** Thin scan plane size (m) in world space. */
+  scanPlaneSizeM: [number, number, number];
+  /** Thin scan plane position in world space (m), Z = scanPlaneZMm. */
+  scanPlanePosM: [number, number, number];
+  /** Fixed mesh count: housing + marker + plane. */
+  meshCount: number;
+}
+
+const LINE_HOUSING_MARGIN_M = 0.02; // per-side housing overhang past the sensor
+
+export function lineRigLayout(rig: LineScanCameraConfig): LineRigLayout {
+  const w = rig.line.sensorWidthMm * MM;
+  const depth = 0.05;
+  return {
+    housingM: [0.06, w + 2 * LINE_HOUSING_MARGIN_M, depth],
+    lineMarkerM: [0.012, w, 0.004],
+    lineMarkerPosM: [0, 0, -(depth / 2 + 0.002)],
+    scanPlaneSizeM: [w, 0.012, 0.004],
+    scanPlanePosM: [
+      rig.pose.positionMm[0] * MM,
+      rig.pose.positionMm[1] * MM,
+      rig.line.scanPlaneZMm * MM,
+    ],
+    meshCount: 3,
+  };
+}
+
 interface RigMeshProps {
   rig: CameraConfig;
   state: CameraState;
@@ -59,8 +126,8 @@ interface RigMeshProps {
 }
 
 function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
-  const body = useMemo(() => new THREE.BoxGeometry(0.09, 0.11, 0.06), []);
-  const lens = useMemo(() => new THREE.CylinderGeometry(0.02, 0.025, 0.02, 24), []);
+  const body = useMemo(() => new THREE.BoxGeometry(...AREA_RIG_LAYOUT.bodyM), []);
+  const lens = useMemo(() => new THREE.CylinderGeometry(...AREA_RIG_LAYOUT.lensM), []);
   useEffect(
     () => () => {
       body.dispose();
@@ -71,8 +138,14 @@ function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
 
   const p = rig.pose.positionMm;
   const q = rig.pose.quaternion;
-  const color = STATE_COLORS[state];
+  const color = rigStateColor(state);
+  const emissive = selectionEmissive(selected);
   const isArea = rig.kind === 'AREA_SCAN';
+
+  const lineLayout = useMemo(
+    () => (isArea ? null : lineRigLayout(rig as LineScanCameraConfig)),
+    [rig, isArea],
+  );
 
   const cornersM = useMemo(
     () =>
@@ -103,25 +176,59 @@ function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
           document.body.style.cursor = 'auto';
         }}
       >
-        <mesh geometry={body}>
-          <meshStandardMaterial
-            color="#2f3640"
-            metalness={0.6}
-            roughness={0.4}
-            emissive={selected ? '#ffb84f' : '#000000'}
-            emissiveIntensity={selected ? 0.45 : 0}
-          />
-        </mesh>
-        <mesh geometry={lens} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.038]}>
-          <meshStandardMaterial color="#111827" metalness={0.3} roughness={0.2} />
-        </mesh>
-        {cornersM && (
-          <FrustumLines cornersM={cornersM} color={color} opacity={rig.enabled ? 0.6 : 0.2} />
+        {isArea ? (
+          <>
+            <mesh geometry={body}>
+              <meshStandardMaterial
+                color="#2f3640"
+                metalness={0.6}
+                roughness={0.4}
+                emissive={emissive.color}
+                emissiveIntensity={emissive.intensity}
+              />
+            </mesh>
+            <mesh
+              geometry={lens}
+              rotation={[Math.PI / 2, 0, 0]}
+              position={AREA_RIG_LAYOUT.lensPosM}
+            >
+              <meshStandardMaterial color="#111827" metalness={0.3} roughness={0.2} />
+            </mesh>
+            {cornersM && (
+              <FrustumLines cornersM={cornersM} color={color} opacity={rig.enabled ? 0.6 : 0.2} />
+            )}
+          </>
+        ) : (
+          lineLayout && (
+            <>
+              {/* Long narrow housing: sensor axis along local Y. */}
+              <mesh>
+                <boxGeometry args={lineLayout.housingM} />
+                <meshStandardMaterial
+                  color="#2f3640"
+                  metalness={0.6}
+                  roughness={0.4}
+                  emissive={emissive.color}
+                  emissiveIntensity={emissive.intensity}
+                />
+              </mesh>
+              {/* Optical line marker on the front (optical) face. */}
+              <mesh position={lineLayout.lineMarkerPosM}>
+                <boxGeometry args={lineLayout.lineMarkerM} />
+                <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
+              </mesh>
+            </>
+          )
         )}
       </group>
       {/* Line scanners: world-space scan plane at the encoder-synced Z. */}
-      {!isArea && (
-        <LineScanPlaneMarker rig={rig as LineScanCameraConfig} stateColor={color} onSelect={select} />
+      {lineLayout && (
+        <LineScanPlaneMarker
+          layout={lineLayout}
+          stateColor={color}
+          enabled={rig.enabled}
+          onSelect={select}
+        />
       )}
     </group>
   );
@@ -129,24 +236,25 @@ function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
 
 /** Thin plane marking the line scanner's scan Z (world space, belt-normal). */
 function LineScanPlaneMarker({
-  rig,
+  layout,
   stateColor,
+  enabled,
   onSelect,
 }: {
-  rig: LineScanCameraConfig;
+  layout: LineRigLayout;
   stateColor: string;
+  enabled: boolean;
   onSelect: (e: { stopPropagation: () => void }) => void;
 }) {
-  const p = rig.pose.positionMm;
   return (
-    <mesh position={[p[0] * MM, p[1] * MM, rig.line.scanPlaneZMm * MM]} onClick={onSelect}>
-      <boxGeometry args={[rig.line.sensorWidthMm * MM, 0.012, 0.004]} />
+    <mesh position={layout.scanPlanePosM} onClick={onSelect}>
+      <boxGeometry args={layout.scanPlaneSizeM} />
       <meshStandardMaterial
         color={stateColor}
         emissive={stateColor}
         emissiveIntensity={0.35}
         transparent
-        opacity={rig.enabled ? 0.75 : 0.25}
+        opacity={enabled ? 0.75 : 0.25}
       />
     </mesh>
   );
