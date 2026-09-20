@@ -1,3 +1,10 @@
+> **LEGACY — superseded.** This document is the original assignment brief
+> and the older four-side-camera draft design. It is **not** the design
+> contract for the final report preset. The final report's parameters
+> (six side area cameras at 60°, two line scanners with a 715 mm FOV,
+> 0.35 mm module, …) are frozen in `src/report/reportSpec.ts` — see
+> `REPORT_ALIGNMENT_PLAN.md`.
+
 # Крылов Михаил / Мастерская Ozon Tech — Устройство для считывания штрихкодов на конвейере
 
 ## Сенсоры и их характеристики

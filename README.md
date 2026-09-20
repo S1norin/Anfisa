@@ -13,6 +13,11 @@ pipeline behavior (association, quality gating, aggregation, no-read reasons)
 in a form a reviewer can poke at. A real PoC is still required for optical
 validation.
 
+The final report's numerical parameters (reader geometry, sensor sizes,
+sampling, working distances) are frozen in `src/report/reportSpec.ts` —
+the single source of truth for the report-aligned preset. `Report Draft.md`
+is a legacy draft and is not the design contract.
+
 ---
 
 ## Quick start
