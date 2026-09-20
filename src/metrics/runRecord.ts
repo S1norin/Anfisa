@@ -43,6 +43,23 @@ export interface RunObservationMeta {
   qualityPassed: boolean;
   decoded: boolean;
   reasons: string[];
+  /**
+   * Additive (t7): line-scan audit fields. Present on line-strip
+   * observations only — area-frame rows keep the legacy shape so old
+   * records parse unchanged.
+   */
+  acquisitionKind?: 'LINE_SCAN';
+  /** Lines actually captured by the session (t4 payload). */
+  lineCount?: number;
+  /** Lines the travel interval implies at the rig's encoder step. */
+  expectedLineCount?: number;
+  /** Encoder interval of the strip (encoder-corrected travel). */
+  encoderStartMm?: number;
+  encoderEndMm?: number;
+  /** True when the strip closed after the full travel (no abort). */
+  complete?: boolean;
+  /** Abort reason when the strip was cut short (CAMERA_FAULT, …). */
+  abortReason?: string;
 }
 
 /** Ground-truth parcel record (spawn + photoeye timestamps). */

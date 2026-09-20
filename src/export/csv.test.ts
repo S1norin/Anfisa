@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { recommendedSixViewConfig } from '../capture/presets';
 import { ProcessRun } from '../pipeline/runDriver';
+import type { RunObservationMeta } from '../metrics/runRecord';
 import { metricsToCsv } from './csv';
 
 function baselineRun(): ProcessRun {
@@ -96,6 +97,70 @@ describe('metricsToCsv (AC-10)', () => {
     expect(metricsToCsv(baselineRun().record().metrics)).toBe(
       metricsToCsv(baselineRun().record().metrics),
     );
+  });
+
+  it('line-scan observation rows are stable; area rows keep the legacy layout (t7)', () => {
+    const run = baselineRun().record();
+    const m = run.metrics;
+    const areaObs = run.observations[0]; // recommendedSixView: area rigs only
+    expect(areaObs).toBeDefined();
+    expect(areaObs.acquisitionKind).toBeUndefined(); // legacy shape
+
+    const lineObs: RunObservationMeta[] = [
+      {
+        ...areaObs,
+        frameId: 'LS-TOP@10000',
+        cameraId: 'LS-TOP',
+        face: 'TOP',
+        acquisitionKind: 'LINE_SCAN',
+        lineCount: 6000,
+        expectedLineCount: 6000,
+        encoderStartMm: 1300,
+        encoderEndMm: 1900,
+        ppm: 10,
+        incidenceDeg: 0,
+        complete: true,
+        decoded: true,
+      },
+      {
+        ...areaObs,
+        frameId: 'LS-BOT@15000',
+        cameraId: 'LS-BOT',
+        face: 'BOTTOM',
+        acquisitionKind: 'LINE_SCAN',
+        lineCount: 3000,
+        expectedLineCount: 6000,
+        encoderStartMm: 2000,
+        encoderEndMm: 2600,
+        ppm: 10,
+        incidenceDeg: 0,
+        complete: false,
+        abortReason: 'CLOSE_SPACING',
+        decoded: false,
+      },
+    ];
+
+    const csv = metricsToCsv(m, [areaObs, ...lineObs]);
+    const rows = parseCsv(csv);
+
+    // Area rows unchanged: the legacy metric rows are all still there.
+    const legacy = parseCsv(metricsToCsv(m));
+    for (const [k, v] of Object.entries(legacy)) {
+      expect(rows[k], k).toBe(v);
+    }
+
+    // Exactly one row per LINE_SCAN observation, area obs adds none.
+    const obsKeys = Object.keys(rows).filter((k) => k.startsWith('observations|'));
+    expect(obsKeys.sort()).toEqual(['observations|LS-BOT@15000', 'observations|LS-TOP@10000']);
+    expect(rows['observations|LS-TOP@10000']).toBe(
+      'kind=LINE_SCAN;face=TOP;lineCount=6000;expectedLineCount=6000;encoderStartMm=1300;encoderEndMm=1900;effectivePpm=10;complete=true;decoded=true',
+    );
+    expect(rows['observations|LS-BOT@15000']).toContain('complete=false');
+    expect(rows['observations|LS-BOT@15000']).toContain('abortReason=CLOSE_SPACING');
+    expect(rows['observations|LS-BOT@15000']).toContain('decoded=false');
+
+    // Deterministic.
+    expect(metricsToCsv(m, [areaObs, ...lineObs])).toBe(csv);
   });
 
   it('escapes commas, quotes, and newlines (RFC 4180)', () => {

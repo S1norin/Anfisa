@@ -8,12 +8,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { recommendedSixViewConfig } from '../capture/presets';
+import { recommendedSixViewConfig, reportSixViewConfig } from '../capture/presets';
 import { defaultConfig } from '../domain/config';
 import type { SimConfig } from '../domain/config';
 import type {
   AreaScanCameraConfig,
   LabelInstance,
+  LineScanCameraConfig,
   ParcelState,
   ParcelSpec,
 } from '../domain/types';
@@ -399,5 +400,269 @@ describe('AC-07: close spacing and speed change stay consistent', () => {
     }
     // Metrics remain coherent: evaluated count matches finalized count.
     expect(run.record().metrics.evaluatedParcels).toBe(results.length);
+  });
+});
+
+// ---------- t7: line-scan e2e acceptance (report layout) ----------
+
+/**
+ * Line-scan end-to-end scenarios on the report layout (4 oblique area
+ * readers + TOP/BOTTOM encoder-synced line scanners, GAP bottom
+ * transfer). The oblique readers are too soft to decode at 0.4 mm
+ * modules, so every decode in these runs comes from the line scanners —
+ * the assertions are unambiguous.
+ *
+ * Seed 7 is pinned: it yields 5 top-face and 7 bottom-face labels over
+ * 10 parcels (probed; other seeds can have zero top labels).
+ */
+describe('t7: line-scan e2e acceptance (report layout)', () => {
+  const TOP = 'CAM-005';
+  const BOTTOM = 'CAM-006';
+
+  function lineCfg(seed = 7): SimConfig {
+    const cfg = reportSixViewConfig();
+    cfg.seed = seed;
+    cfg.parcel.tapeChance = 0;
+    cfg.parcel.labelDamageChance = 0;
+    return cfg;
+  }
+
+  function lineObs(rec: ReturnType<ProcessRun['record']>, face?: string) {
+    return rec.observations.filter(
+      (o) => o.acquisitionKind === 'LINE_SCAN' && (face === undefined || o.face === face),
+    );
+  }
+
+  function lineEvents(rec: ReturnType<ProcessRun['record']>) {
+    return rec.simEvents.filter(
+      (e): e is Extract<(typeof rec.simEvents)[number], { type: `LINE_SCAN_${string}` }> => e.type.startsWith('LINE_SCAN'),
+    );
+  }
+
+  function bottomLineRig(cfg: SimConfig): LineScanCameraConfig {
+    const rig = cfg.cameraRigs.find(
+      (r): r is LineScanCameraConfig => r.role === 'BOTTOM' && r.kind === 'LINE_SCAN',
+    );
+    if (!rig) throw new Error('report layout has no BOTTOM line scanner');
+    return rig;
+  }
+
+  it('baseline: TOP decodes every top label 100%; BOTTOM decodes through the gap', () => {
+    const run = new ProcessRun(lineCfg(), 10);
+    run.runToCompletion();
+    const rec = run.record();
+
+    // Ground truth for the pinned seed.
+    const gt = new Map(rec.groundTruth.map((g) => [g.parcelId, g.spec]));
+    const topLabels: string[] = [];
+    const bottomLabels: string[] = [];
+    for (const [id, spec] of gt) {
+      for (const l of spec.labels) {
+        if (l.face === 'TOP') topLabels.push(`${id}:${l.labelInstanceId}`);
+        if (l.face === 'BOTTOM') bottomLabels.push(`${id}:${l.labelInstanceId}`);
+      }
+    }
+    expect(topLabels.length).toBeGreaterThan(0);
+    expect(bottomLabels.length).toBeGreaterThan(0);
+
+    // The BOTTOM scan plane sits over the 100 mm GAP opening (station
+    // centre): every bottom strip is observable, and all decode.
+    const bottomRig = bottomLineRig(rec.config);
+    expect(bottomRig.line.scanPlaneZMm).toBe(rec.config.station.lengthMm / 2);
+
+    const topObs = lineObs(rec, 'TOP');
+    const botObs = lineObs(rec, 'BOTTOM');
+    // Deterministic 100% read on both planes: exactly one observation per
+    // top/bottom label instance, all decoded.
+    expect([...topObs.map((o) => `${o.parcelId}:${o.labelInstanceId}`)].sort()).toEqual(
+      [...topLabels].sort(),
+    );
+    expect([...botObs.map((o) => `${o.parcelId}:${o.labelInstanceId}`)].sort()).toEqual(
+      [...bottomLabels].sort(),
+    );
+    expect(topObs.every((o) => o.decoded)).toBe(true);
+    expect(botObs.every((o) => o.decoded)).toBe(true);
+
+    // Each strip is one complete, encoder-aligned pass over the parcel
+    // length (600 mm ± one 5 ms step).
+    for (const o of [...topObs, ...botObs]) {
+      expect(o.complete, o.frameId).toBe(true);
+      expect(o.abortReason).toBeUndefined();
+      const travelMm = o.encoderEndMm! - o.encoderStartMm!;
+      expect(travelMm).toBeGreaterThanOrEqual(600);
+      expect(travelMm).toBeLessThan(610);
+      expect(o.lineCount).toBeGreaterThan(0);
+      expect(o.ppm).toBeGreaterThan(rec.config.quality.ppmMin);
+    }
+  });
+
+  it('solid deck: bottom plane off the gap yields zero bottom reads', () => {
+    const cfg = lineCfg();
+    bottomLineRig(cfg).line.scanPlaneZMm = 300; // solid deck (GAP opening centred at L/2)
+    const run = new ProcessRun(cfg, 10);
+    run.runToCompletion();
+    const rec = run.record();
+
+    // The bottom strips still run (sessions complete) but the deck blocks
+    // the face: nothing observed, nothing decoded — never a fabricated read.
+    expect(lineObs(rec, 'BOTTOM')).toEqual([]);
+    const bottomTerminal = lineEvents(rec).filter(
+      (e) => e.cameraId === BOTTOM && e.type !== 'LINE_SCAN_STARTED',
+    );
+    expect(bottomTerminal).toHaveLength(10);
+    // TOP is unaffected: every top label still decodes.
+    const topObs = lineObs(rec, 'TOP');
+    expect(topObs.length).toBeGreaterThan(0);
+    expect(topObs.every((o) => o.decoded)).toBe(true);
+  });
+
+  it('mid-run TOP fault: the open strip aborts; later parcels get no strip', () => {
+    const run = new ProcessRun(lineCfg(), 10);
+    // 11.8 s: mid-strip of P-0004 (the first top-labelled parcel; its
+    // front crossed the plane at 11.7 s). P-0005..P-0009 are top-labelled.
+    run.stepMany(2360);
+    run.sim.state.cameraStates[TOP] = 'FAULT';
+    run.runToCompletion();
+    const rec = run.record();
+
+    // Exactly one aborted strip, the one open at the fault: incomplete,
+    // CAMERA_FAULT, and its top labels decode nothing.
+    const aborted = lineEvents(rec).filter(
+      (e): e is Extract<typeof e, { type: 'LINE_SCAN_ABORTED' }> =>
+        e.type === 'LINE_SCAN_ABORTED' && e.cameraId === TOP,
+    );
+    expect(aborted).toHaveLength(1);
+    expect(aborted[0].parcelId).toBe('P-0004');
+    expect(aborted[0].reason).toBe('CAMERA_FAULT');
+    expect(aborted[0].complete).toBe(false);
+    // A full 600 mm parcel at 0.1 mm/line is ~6000 lines; the fault cut
+    // the strip far short.
+    expect(aborted[0].lineCount).toBeLessThan(6000);
+
+    // A faulted scanner stops starting new strips: the post-fault
+    // top-labelled parcels produce no TOP events at all.
+    const topStarted = lineEvents(rec).filter(
+      (e): e is Extract<typeof e, { type: 'LINE_SCAN_STARTED' }> =>
+        e.type === 'LINE_SCAN_STARTED' && e.cameraId === TOP,
+    );
+    expect(topStarted.map((e) => e.parcelId)).toEqual([
+      'P-0000', 'P-0001', 'P-0002', 'P-0003', 'P-0004',
+    ]);
+
+    // No fabricated reads: zero decoded top observations in the whole run,
+    // and every top label instance is undecoded in the results.
+    expect(lineObs(rec, 'TOP').filter((o) => o.decoded)).toHaveLength(0);
+    const topObs = lineObs(rec, 'TOP');
+    expect(topObs).toHaveLength(1);
+    expect(topObs[0].parcelId).toBe('P-0004');
+    expect(topObs[0].decoded).toBe(false);
+    expect(topObs[0].complete).toBe(false);
+    expect(topObs[0].abortReason).toBe('CAMERA_FAULT');
+    expect(topObs[0].reasons).toEqual(['CAMERA_FAULT']);
+    for (const r of rec.results) {
+      const spec = rec.groundTruth.find((g) => g.parcelId === r.parcelId)!.spec;
+      for (const l of spec.labels) {
+        if (l.face !== 'TOP') continue;
+        const lr = r.labelResults.find((x) => x.labelInstanceId === l.labelInstanceId);
+        expect(lr?.decoded, `${r.parcelId}:${l.labelInstanceId}`).toBe(false);
+      }
+    }
+    // The BOTTOM line scanner is unaffected by the TOP fault.
+    expect(lineObs(rec, 'BOTTOM').every((o) => o.decoded)).toBe(true);
+    expect(lineObs(rec, 'BOTTOM')).toHaveLength(7);
+  });
+
+  it('speed change to 1.5 m/s: undersampled strips fail LOW_PPM, no decode', () => {
+    const run = new ProcessRun(lineCfg(), 10);
+    run.stepMany(1200); // 6 s at 1 m/s, then over-sample → under-sample
+    run.sim.state.speedMmPerSec = 1500; // 15 000 lines/s > 12 000 cap
+    run.runToCompletion();
+    const rec = run.record();
+
+    // Seed 7 puts all 5 top labels on parcels crossing after the change.
+    const topObs = lineObs(rec, 'TOP');
+    expect(topObs.length).toBeGreaterThan(0);
+    for (const o of topObs) {
+      expect(o.simTimeMs, o.frameId).toBeGreaterThan(6000);
+      // The strip itself is complete — the sampling gate is what fails.
+      expect(o.complete, o.frameId).toBe(true);
+      expect(o.decoded, o.frameId).toBe(false);
+      expect(o.reasons, o.frameId).toContain('LOW_PPM');
+    }
+    // No top label instance decodes in the whole run.
+    for (const r of rec.results) {
+      const spec = rec.groundTruth.find((g) => g.parcelId === r.parcelId)!.spec;
+      for (const l of spec.labels) {
+        if (l.face !== 'TOP') continue;
+        const lr = r.labelResults.find((x) => x.labelInstanceId === l.labelInstanceId);
+        expect(lr?.decoded, `${r.parcelId}:${l.labelInstanceId}`).toBe(false);
+        expect(lr?.reasons, `${r.parcelId}:${l.labelInstanceId}`).toContain('LOW_PPM');
+      }
+    }
+  });
+
+  it('close spacing: sessions never interleave; aborts carry CLOSE_SPACING', () => {
+    const cfg = lineCfg();
+    cfg.parcel.spawnIntervalMs = 400; // 400 mm front-to-front < 600 mm parcel
+    const run = new ProcessRun(cfg, 10);
+    run.runToCompletion();
+    const rec = run.record();
+
+    for (const cam of [TOP, BOTTOM]) {
+      const terminal = lineEvents(rec).filter(
+        (e): e is Extract<
+          (typeof rec.simEvents)[number],
+          { type: 'LINE_SCAN_COMPLETED' | 'LINE_SCAN_ABORTED' }
+        > =>
+          (e.type === 'LINE_SCAN_COMPLETED' || e.type === 'LINE_SCAN_ABORTED') &&
+          e.cameraId === cam,
+      );
+      // Bounded: exactly one terminal event per parcel per rig.
+      expect(terminal).toHaveLength(10);
+      // Encoder intervals are pairwise disjoint: lines are never
+      // interleaved between parcels.
+      const sorted = [...terminal].sort((a, b) => a.encoderStartMm - b.encoderStartMm);
+      for (let i = 1; i < sorted.length; i++) {
+        expect(sorted[i].encoderStartMm).toBeGreaterThanOrEqual(sorted[i - 1].encoderEndMm);
+      }
+      // Every abort is the close-spacing policy decision, never an error.
+      for (const e of terminal) {
+        if (e.type === 'LINE_SCAN_ABORTED') expect(e.reason).toBe('CLOSE_SPACING');
+      }
+    }
+
+    // Incomplete strips decode nothing; decoded strips are complete.
+    const obs = lineObs(rec);
+    expect(obs.filter((o) => o.decoded).every((o) => o.complete)).toBe(true);
+    expect(obs.filter((o) => !o.complete).every((o) => !o.decoded)).toBe(true);
+    expect(obs.some((o) => o.decoded)).toBe(true); // some parcels strip clean
+  });
+
+  it('bounded events: 10 parcels → 4 line-scan events each, never per-line', () => {
+    const run = new ProcessRun(lineCfg(), 10);
+    run.runToCompletion();
+    const rec = run.record();
+
+    // 2 rigs × (1 STARTED + 1 terminal) × 10 parcels = O(parcels).
+    const events = lineEvents(rec);
+    expect(events).toHaveLength(40);
+
+    // The same runs acquire tens of thousands of lines — the event stream
+    // is bounded, not per-line (NFR-006).
+    const totalLines = events
+      .filter((e): e is Extract<typeof e, { type: 'LINE_SCAN_COMPLETED' }> =>
+        e.type === 'LINE_SCAN_COMPLETED')
+      .reduce((sum, e) => sum + e.lineCount, 0);
+    expect(totalLines).toBeGreaterThan(10000);
+    expect(events.length).toBeLessThan(totalLines / 100);
+
+    // Each parcel crosses both planes exactly once (two terminal events).
+    const perParcel = new Map<string, number>();
+    for (const e of events) {
+      if (e.type === 'LINE_SCAN_STARTED') continue;
+      perParcel.set(e.parcelId, (perParcel.get(e.parcelId) ?? 0) + 1);
+    }
+    expect(perParcel.size).toBe(10);
+    for (const n of perParcel.values()) expect(n).toBe(2);
   });
 });

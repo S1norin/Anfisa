@@ -137,7 +137,10 @@ export function CameraLabView() {
             onExportMetricsCsv={() =>
               downloadTextFile(
                 `anfisa-metrics-${state.runId}.csv`,
-                metricsToCsv(simStore.computeLiveMetrics()),
+                metricsToCsv(
+                  simStore.computeLiveMetrics(),
+                  simStore.liveObservations,
+                ),
                 'text/csv',
               )
             }

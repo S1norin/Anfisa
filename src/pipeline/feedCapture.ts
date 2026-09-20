@@ -255,6 +255,16 @@ function feedLineStrip(
         qualityPassed: stripObs.quality.passed,
         decoded: stripObs.decodable,
         reasons: stripObs.reasons,
+        // Line-scan audit fields (t7, additive — area rows stay legacy).
+        acquisitionKind: 'LINE_SCAN' as const,
+        lineCount: stripObs.lineCount,
+        expectedLineCount: stripObs.expectedLineCount,
+        encoderStartMm: stripObs.encoderStartMm,
+        encoderEndMm: stripObs.encoderEndMm,
+        complete: stripObs.complete,
+        ...(stripObs.abortReason !== undefined
+          ? { abortReason: stripObs.abortReason }
+          : {}),
       });
     }
   }
