@@ -287,7 +287,7 @@ export function defaultLineScanRig(
       maxLineRateLinesPerSec: 12000,
       maxStripLengthMm: 5000,
       scanPlaneZMm,
-      lineExposureUs: 100,
+      lineExposureUs: 25, // short global line exposure (§Part 2)
       ...overrides,
     },
     illumination: {

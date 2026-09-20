@@ -118,3 +118,25 @@ export function stationDeckOccludesBottom(
   }
   return labelZMm < 0 || labelZMm > L;
 }
+
+/**
+ * Deck occlusion of a BOTTOM line-scan strip (t5, AC-05 extension).
+ *
+ * A line strip spans the parcel's full z-interval at the scan plane, so
+ * it is occluded only when the deck covers that ENTIRE interval — a strip
+ * that partly crosses the GAP opening is partially observable.
+ */
+export function stationDeckOccludesBottomStrip(
+  config: SimConfig,
+  parcel: ParcelState,
+): boolean {
+  const L = config.station.lengthMm;
+  const rearZ = parcel.frontZMm - parcel.spec.lengthMm;
+  const frontZ = parcel.frontZMm;
+  if (config.station.bottomTransfer === 'GAP') {
+    const gMin = L / 2 - GAP_OPENING_MM / 2;
+    const gMax = L / 2 + GAP_OPENING_MM / 2;
+    return frontZ <= gMin || rearZ >= gMax;
+  }
+  return frontZ <= 0 || rearZ >= L;
+}
