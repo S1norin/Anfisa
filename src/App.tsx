@@ -5,6 +5,7 @@ import { ErrorBoundary } from './app/errorBoundary';
 import { OperationsView } from './ui/views/operationsView';
 import { CameraLabView } from './ui/views/cameraLabView';
 import { SchemaView } from './ui/views/schemaView';
+import { HowItWorksView } from './ui/views/howItWorksView';
 import { MetricsView } from './ui/views/metricsView';
 import { simStore } from './store/simStore';
 
@@ -40,6 +41,7 @@ export function App() {
             <Route path="/operations" element={<OperationsView />} />
             <Route path="/camera-lab" element={<CameraLabView />} />
             <Route path="/schema" element={<SchemaView />} />
+            <Route path="/how-it-works" element={<HowItWorksView />} />
             <Route path="/metrics" element={<MetricsView />} />
             <Route path="*" element={<Navigate to="/operations" replace />} />
           </Route>

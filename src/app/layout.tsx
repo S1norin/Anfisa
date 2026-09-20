@@ -4,6 +4,7 @@ const NAV_ITEMS = [
   { to: '/operations', label: 'Operations' },
   { to: '/camera-lab', label: 'Camera Lab' },
   { to: '/schema', label: 'Schema' },
+  { to: '/how-it-works', label: 'How It Works' },
   { to: '/metrics', label: 'Metrics' },
 ] as const;
 
