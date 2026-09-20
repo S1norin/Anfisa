@@ -94,6 +94,18 @@ describe('station geometry builder', () => {
     }
   });
 
+  it('renders two upstream guide rails at x = ±belt/2 spanning the transfer zone (t3-guides)', () => {
+    const group = buildStationGroup(defaultConfig());
+    const rails = findParts(group, 'guide-rail');
+    expect(rails).toHaveLength(2);
+    for (const rail of rails) {
+      expect(Math.abs(rail.position.x)).toBeCloseTo(0.325, 6);
+    }
+    const box = new THREE.Box3().setFromObject(rails[0]);
+    expect(box.min.z).toBeCloseTo(0, 6);
+    expect(box.max.z).toBeCloseTo(2.2, 6);
+  });
+
   it('GAP: single 100 mm opening in the deck at mid-station', () => {
     const gap = defaultConfig();
     gap.station.bottomTransfer = 'GAP';

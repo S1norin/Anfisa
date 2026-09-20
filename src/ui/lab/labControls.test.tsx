@@ -7,6 +7,7 @@ import { fireEvent, render, screen, within, waitFor } from '@testing-library/rea
 import { describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import { recommendedSixViewConfig, reportSixViewConfig } from '../../capture/presets';
+import { PRESETS } from '../../presets/presets';
 import type { SimConfig } from '../../domain/config';
 import type { AreaScanCameraConfig, LineScanCameraConfig } from '../../domain/types';
 import { LabControls } from './labControls';
@@ -122,13 +123,12 @@ describe('LabControls', () => {
     expect(step.disabled).toBe(false);
   });
 
-  it('preset select offers all eight presets and applies by id (CFG-002)', () => {
+  it('preset select offers every registry preset and applies by id (CFG-002)', () => {
     const cfg = recommendedSixViewConfig();
     const props = renderControls({ config: cfg, selectedCameraId: cfg.cameraRigs[0].id });
     const select = screen.getByTestId('lab-preset') as HTMLSelectElement;
-    // 1 placeholder + final report layout + legacy report layout + 8
-    // comparison presets.
-    expect(select.options.length).toBe(11);
+    // 1 placeholder + every entry of the preset registry.
+    expect(select.options.length).toBe(PRESETS.length + 1);
     fireEvent.change(select, { target: { value: 'glare-stress' } });
     expect(props.onApplyPreset).toHaveBeenCalledWith('glare-stress');
   });

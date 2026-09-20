@@ -10,6 +10,7 @@ import {
   REPORT_SIDE_MOUNTS,
   REPORT_STATION,
   focalLengthForFovWidthMm,
+  guideLateralRangeMm,
   lineBlurPx,
   lineCrossBeltPpm,
   lineEffectivePpm,
@@ -239,5 +240,17 @@ describe('report contract: six side-reader mount table', () => {
     const m = reportSideMounts(1000, 300, 1000);
     near(m[1].positionMm, [1000, 150, 500]);
     expect(m[1].targetMm).toEqual([0, 150, 500]);
+  });
+});
+
+describe('guideLateralRangeMm (t3-guides)', () => {
+  it('is half the free belt: 650 mm belt, 400 mm parcel → 125 mm', () => {
+    expect(guideLateralRangeMm(650, 400)).toBe(125);
+    expect(
+      guideLateralRangeMm(
+        REPORT_STATION.beltWidthMm,
+        REPORT_STATION.parcelWidthMm,
+      ),
+    ).toBe(125);
   });
 });

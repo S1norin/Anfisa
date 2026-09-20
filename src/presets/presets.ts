@@ -186,6 +186,19 @@ export const PRESETS: readonly PresetDef[] = [
     },
   },
   {
+    id: 'lateral-offset-stress',
+    name: 'Lateral offset stress · guide limit',
+    description:
+      'Report layout with the parcel pushed 120 mm sideways — inside the 125 mm upstream-guide range (650 mm belt, 400 mm parcel): the off-centre faces sit at the working-distance edge and the side readers see them at the worst-case incidence.',
+    category: 'STRESS',
+    build: (seed = DEFAULT_PRESET_SEED) => {
+      const cfg = reportEightReaderConfig();
+      cfg.seed = seed;
+      cfg.parcel.lateralOffsetMm = 120;
+      return cfg;
+    },
+  },
+  {
     id: 'small-module-stress',
     name: 'Small-module stress',
     description:

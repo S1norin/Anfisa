@@ -53,6 +53,7 @@ type Part =
   | 'belt-deck'
   | 'belt-edge'
   | 'side-rail'
+  | 'guide-rail'
   | 'leg'
   | 'photoeye'
   | 'sort-point'
@@ -174,6 +175,26 @@ export function buildStationGroup(cfg: SimConfig): THREE.Group {
         ),
       );
     }
+  }
+
+  // Upstream centreing guides (report: the parcel's sides run between
+  // these rails, keeping its centre within ±(belt − parcel)/2 of the
+  // belt centreline). Rendered at the belt edges for every config.
+  const guideH = 0.03;
+  for (const side of [-1, 1] as const) {
+    group.add(
+      makeBox(
+        'guide-rail',
+        0.02,
+        guideH,
+        L,
+        side * (W / 2),
+        guideH / 2,
+        L / 2,
+        0x8899aa,
+        `guide-rail-${side < 0 ? 'L' : 'R'}`,
+      ),
+    );
   }
 
   // Side-grip rails (SIDE_GRIP only) carry the parcel's sides through [0, L].

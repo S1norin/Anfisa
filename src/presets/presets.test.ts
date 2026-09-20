@@ -31,6 +31,7 @@ const IDS = [
   'bottom-gap',
   'side-grip',
   'glare-stress',
+  'lateral-offset-stress',
   'small-module-stress',
   'camera-failure',
   'close-spacing',
@@ -44,6 +45,19 @@ describe('named presets (CFG-002)', () => {
 
   it('report-8reader is the first (default) registry entry', () => {
     expect(PRESETS[0].id).toBe('report-8reader');
+  });
+
+  it('lateral-offset-stress: eight-reader layout, parcel at 120 mm (inside the 125 mm guide range)', () => {
+    const cfg = getPreset('lateral-offset-stress')!.build();
+    expect(cfg.parcel.lateralOffsetMm).toBe(120);
+    const areas = cfg.cameraRigs.filter((r) => r.kind === 'AREA_SCAN');
+    const lines = cfg.cameraRigs.filter((r) => r.kind === 'LINE_SCAN');
+    expect(areas).toHaveLength(6);
+    expect(lines).toHaveLength(2);
+    // The offset moves the parcel, not the cameras: same poses as report-8reader.
+    expect(cfg.cameraRigs.map((r) => r.pose.positionMm)).toEqual(
+      getPreset('report-8reader')!.build().cameraRigs.map((r) => r.pose.positionMm),
+    );
   });
 
   it('every preset builds a valid config (CFG-001/CFG-003)', () => {

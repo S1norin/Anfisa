@@ -174,6 +174,16 @@ export const REPORT_STATION = {
   stationLengthMm: 2200,
 } as const;
 
+/**
+ * Allowed lateral parcel range set by the upstream centreing guides
+ * (report: the guides keep the parcel centred on the belt): half the
+ * free belt on each side = (belt − parcel) / 2. 650 mm belt / 400 mm
+ * parcel → 125 mm.
+ */
+export function guideLateralRangeMm(beltWidthMm: number, parcelWidthMm: number): number {
+  return (beltWidthMm - parcelWidthMm) / 2;
+}
+
 // ---------------------------------------------------------------------------
 // Derived calculations (the report's math, as pure functions)
 
