@@ -25,9 +25,27 @@ import {
   type StationGeometry,
 } from '../domain/camera';
 import { defaultConfig, type SimConfig } from '../domain/config';
-import type { AreaScanCameraConfig } from '../domain/types';
+import type { AreaScanCameraConfig, CameraRole } from '../domain/types';
+import {
+  REPORT_BARCODE,
+  REPORT_LINE,
+  REPORT_SIDE,
+  reportSideMounts,
+} from '../report/reportSpec';
 
 type V3 = [number, number, number];
+
+/** Canonicalize -0 → +0 so preset configs JSON round-trip bit-identical. */
+const z = (n: number): number => (n === 0 ? 0 : n);
+const cleanPose = (pose: { positionMm: V3; quaternion: [number, number, number, number] }) => ({
+  positionMm: [z(pose.positionMm[0]), z(pose.positionMm[1]), z(pose.positionMm[2])] as V3,
+  quaternion: [
+    z(pose.quaternion[0]),
+    z(pose.quaternion[1]),
+    z(pose.quaternion[2]),
+    z(pose.quaternion[3]),
+  ] as [number, number, number, number],
+});
 
 /** Stopped-down proxy aperture for the preset (deep depth of field). */
 const PRESET_APERTURE = 22;
@@ -219,5 +237,108 @@ export function reportSixViewConfig(): SimConfig {
   cfg.quality.incidenceDegMax = 65;
   cfg.quality.focusPxTarget = 2;
   cfg.quality.focusPxMax = 5;
+  return cfg;
+}
+
+/**
+ * The final report's eight-reader layout (REPORT_ALIGNMENT_PLAN.md, the
+ * only design contract): six side area cameras at 60° directions (three
+ * per conveyor side) plus top and bottom line scanners, on the 100 mm
+ * bottom transfer gap. Every optical value comes from
+ * `src/report/reportSpec.ts` — nothing here is invented.
+ *
+ * Report values used: 8000×4500 px @ 4.5 µm side sensors, 55 mm lens at
+ * 1450 mm working distance (25 FPS, 75 µs, global shutter); line scanners
+ * 8192 px over a 715 mm scan-plane FOV (40.96 mm physical), 0.1 mm
+ * encoder step, 12 000 lines/s ceiling, 100 mm bottom gap, 0.35 mm
+ * barcode module.
+ */
+export function reportEightReaderConfig(): SimConfig {
+  const cfg = defaultConfig();
+  // The report's bottom view requires the 100 mm transfer opening.
+  cfg.station.bottomTransfer = 'GAP';
+  cfg.barcode.xDimensionMm = REPORT_BARCODE.xDimensionMm;
+
+  const station: StationGeometry = {
+    lengthMm: cfg.station.lengthMm,
+    beltWidthMm: cfg.belt.widthMm,
+  };
+  const mounts = reportSideMounts(cfg.station.lengthMm, cfg.parcel.heightMm);
+  const base = defaultCameraRigs(station, {
+    sensorWidthPx: REPORT_SIDE.sensorWidthPx,
+    sensorHeightPx: REPORT_SIDE.sensorHeightPx,
+    focalLengthMm: REPORT_SIDE.focalLengthMm,
+    exposureUs: REPORT_SIDE.exposureUsPreset,
+    fps: REPORT_SIDE.fpsPreset,
+    shutter: REPORT_SIDE.shutter,
+  });
+  const template = base.find((r) => r.role === 'FRONT')!;
+  // Human names follow the direction angles (from +z toward +x).
+  const sideNames = [
+    'Side reader · FRONT-RIGHT 30°',
+    'Side reader · RIGHT 90°',
+    'Side reader · REAR-RIGHT 150°',
+    'Side reader · REAR-LEFT 210°',
+    'Side reader · LEFT 270°',
+    'Side reader · FRONT-LEFT 330°',
+  ];
+  const sides: AreaScanCameraConfig[] = mounts.map((m, i) =>
+    aim(
+      {
+        ...template,
+        id: `CAM-${String(i + 1).padStart(3, '0')}`,
+        role: 'CUSTOM' as CameraRole,
+        name: sideNames[i],
+      },
+      m.positionMm,
+      m.targetMm,
+    ),
+  );
+
+  // Top/bottom line scanners: the report's 715 mm FOV, 8192 px, 0.1 mm
+  // step, 12 kHz ceiling; top plane 150 mm above the parcel top, bottom
+  // plane in the 100 mm gap (both labelled reportSpec assumptions).
+  const cz = cfg.station.lengthMm / 2;
+  // The top eye sits 150 mm ABOVE the parcel top face (reportSpec
+  // working distance); the bottom eye in the 100 mm transfer gap.
+  const topEye: V3 = [0, cfg.parcel.heightMm + REPORT_LINE.topWorkingDistanceMm, cz];
+  const bottomEye: V3 = [0, -REPORT_LINE.bottomGapMm, cz];
+  const lineOverrides = {
+    physicalSensorWidthMm: REPORT_LINE.physicalSensorWidthMm,
+    fovWidthMm: REPORT_LINE.fovWidthMm,
+    encoderStepMmPerLine: REPORT_LINE.encoderStepMmPerLine,
+    maxLineRateLinesPerSec: REPORT_LINE.maxLineRateLinesPerSec,
+    lineExposureUs: REPORT_SIDE.exposureUsPreset,
+  };
+  const top = defaultLineScanRig(
+    'CAM-007',
+    'TOP',
+    topEye,
+    lookAtQuaternion(topEye, [0, cfg.parcel.heightMm, cz]),
+    cz,
+    lineOverrides,
+  );
+  const bottom = defaultLineScanRig(
+    'CAM-008',
+    'BOTTOM',
+    bottomEye,
+    lookAtQuaternion(bottomEye, [0, 0, cz]),
+    cz,
+    lineOverrides,
+  );
+
+  cfg.cameraRigs = [...sides, top, bottom].map((r) => ({
+    ...r,
+    pose: cleanPose(r.pose),
+  }));
+  // The report's acquisition bands are encoded per rig; mirror them in the
+  // global camera block so the Schema view and the rigs agree.
+  cfg.cameras.sensorWidthPx = REPORT_SIDE.sensorWidthPx;
+  cfg.cameras.sensorHeightPx = REPORT_SIDE.sensorHeightPx;
+  cfg.cameras.focalLengthMm = REPORT_SIDE.focalLengthMm;
+  cfg.cameras.exposureUs = REPORT_SIDE.exposureUsPreset;
+  cfg.cameras.fps = REPORT_SIDE.fpsPreset;
+  // The 0.35 mm module is demanding: the default ppm floor (2.0) is the
+  // report's minimum-ppm rule and is met (side ≥ 3.07, line travel 3.5).
   return cfg;
 }

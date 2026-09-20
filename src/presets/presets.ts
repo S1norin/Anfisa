@@ -17,6 +17,7 @@ import {
   aim,
   recommendedSixViewConfig,
   recommendedSixViewRigs,
+  reportEightReaderConfig,
   reportSixViewConfig,
 } from '../capture/presets';
 import { defaultConfig, validateConfig, type SimConfig } from '../domain/config';
@@ -65,10 +66,22 @@ function withRigs(cfg: SimConfig, rigs: CameraConfig[]): SimConfig {
 
 export const PRESETS: readonly PresetDef[] = [
   {
-    id: 'report-6view',
-    name: 'Report layout · 4 oblique + top/bottom',
+    id: 'report-8reader',
+    name: 'Report layout · 6 side + 2 line (final)',
     description:
-      'The report design: four horizontal 45° side views, dedicated top/bottom readers, and two conveyor sections separated by a 100 mm optical gap.',
+      'The final report layout: six side area cameras at 60° directions (36 mm sensors, 55 mm lens, 1450 mm working distance) plus top/bottom line scanners (715 mm FOV, 8192 px, 0.1 mm step, 12 kHz), 0.35 mm module, and the 100 mm bottom transfer gap. Every value from src/report/reportSpec.ts.',
+    category: 'RIG',
+    build: (seed = DEFAULT_PRESET_SEED) => {
+      const cfg = reportEightReaderConfig();
+      cfg.seed = seed;
+      return cfg;
+    },
+  },
+  {
+    id: 'report-6view',
+    name: 'Report layout · 4 oblique + top/bottom (legacy)',
+    description:
+      'Legacy draft layout: four horizontal 45° side views, dedicated top/bottom readers, and two conveyor sections separated by a 100 mm optical gap. Superseded by report-8reader (see REPORT_ALIGNMENT_PLAN.md).',
     category: 'RIG',
     build: (seed = DEFAULT_PRESET_SEED) => {
       const cfg = reportSixViewConfig();
@@ -133,7 +146,7 @@ export const PRESETS: readonly PresetDef[] = [
       'Report layout with glossy tape on every parcel, unpolarized wide-open area readers, and high ambient leak on every light (area and line): the glare component drives NO_READs.',
     category: 'STRESS',
     build: (seed = DEFAULT_PRESET_SEED) => {
-      const cfg = reportSixViewConfig();
+      const cfg = reportEightReaderConfig();
       cfg.seed = seed;
       cfg.parcel.material = 'WHITE_CARD';
       cfg.parcel.tapeChance = 1;
@@ -192,7 +205,7 @@ export const PRESETS: readonly PresetDef[] = [
       'Report layout with the TOP line scanner disabled in config: top-face labels are never captured, so top-face parcels can NO_READ.',
     category: 'FAILURE',
     build: (seed = DEFAULT_PRESET_SEED) => {
-      const cfg = reportSixViewConfig();
+      const cfg = reportEightReaderConfig();
       cfg.seed = seed;
       cfg.cameraRigs = cfg.cameraRigs.map((r) =>
         r.role === 'TOP' ? { ...r, enabled: false, name: `${r.name} (offline)` } : r,

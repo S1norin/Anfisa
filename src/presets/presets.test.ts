@@ -24,6 +24,7 @@ import {
 } from './presets';
 
 const IDS = [
+  'report-8reader',
   'report-6view',
   'recommended-6view',
   'draft-4-oblique',
@@ -36,9 +37,13 @@ const IDS = [
 ];
 
 describe('named presets (CFG-002)', () => {
-  it('exposes the report layout plus the eight comparison presets', () => {
+  it('exposes the final report layout plus the legacy and comparison presets', () => {
     expect(PRESETS.map((p) => p.id)).toEqual(IDS);
     for (const id of IDS) expect(getPreset(id)).toBeDefined();
+  });
+
+  it('report-8reader is the first (default) registry entry', () => {
+    expect(PRESETS[0].id).toBe('report-8reader');
   });
 
   it('every preset builds a valid config (CFG-001/CFG-003)', () => {
@@ -188,6 +193,9 @@ describe('preset run reproducibility (CFG-004)', () => {
   it('camera-failure: TOP reader contributes no observations and top-face labels never decode', () => {
     const run = new ProcessRun(applyPresetConfig('camera-failure', DEFAULT_PRESET_SEED), 8);
     run.runToCompletion();
+    // The preset disables the TOP rig; find its id in the built config.
+    const topId = run.sim.state.config.cameraRigs.find((r) => r.role === 'TOP')!.id;
+    expect(topId.length).toBeGreaterThan(0);
     const topLabels = run.pipeline.results
       .flatMap((r) => r.labelResults)
       .filter((l) => l.face === 'TOP');
@@ -195,12 +203,12 @@ describe('preset run reproducibility (CFG-004)', () => {
     expect(topLabels.length).toBeGreaterThan(0);
     for (const l of topLabels) {
       expect(l.decoded).toBe(false);
-      // TOP reader is CAM-005; it must contribute no observations at all.
-      expect(l.cameras).not.toContain('CAM-005');
+      // The TOP reader must contribute no observations at all.
+      expect(l.cameras).not.toContain(topId);
     }
     const anyObservedByTop = run.pipeline.results
       .flatMap((r) => r.labelResults)
-      .some((l) => l.cameras.includes('CAM-005'));
+      .some((l) => l.cameras.includes(topId));
     expect(anyObservedByTop).toBe(false);
   });
 });

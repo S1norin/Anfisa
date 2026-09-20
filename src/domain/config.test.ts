@@ -79,20 +79,19 @@ describe('migrateConfigToLatest (CFG-007)', () => {
       [0, 0, 0, 1],
       0,
     );
-    // Re-shape to the v3 line block (sensorWidthMm only).
+    // Re-shape to the exact v3 line block (sensorWidthMm instead of the
+    // v4 physical/fov split).
     const v3Line = {
       pixelsPerLine: line.line.pixelsPerLine,
       sensorWidthMm: 512,
       encoderStepMmPerLine: line.line.encoderStepMmPerLine,
       maxLineRateLinesPerSec: line.line.maxLineRateLinesPerSec,
+      maxStripLengthMm: line.line.maxStripLengthMm,
       lineExposureUs: line.line.lineExposureUs,
       scanPlaneZMm: line.line.scanPlaneZMm,
-      mappingJitterMm: line.line.mappingJitterMm,
-      missingLineChance: line.line.missingLineChance,
-      bandingAmpMm: line.line.bandingAmpMm,
     };
     cfg.cameraRigs = [line];
-    (cfg.cameraRigs[0] as typeof line).line = v3Line as typeof line.line;
+    (cfg.cameraRigs[0] as unknown as typeof line).line = v3Line as unknown as typeof line.line;
     cfg.version = 3;
 
     const migrated = migrateConfigToLatest(cfg) as typeof cfg;

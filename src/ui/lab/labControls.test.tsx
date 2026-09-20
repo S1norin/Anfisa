@@ -126,8 +126,9 @@ describe('LabControls', () => {
     const cfg = recommendedSixViewConfig();
     const props = renderControls({ config: cfg, selectedCameraId: cfg.cameraRigs[0].id });
     const select = screen.getByTestId('lab-preset') as HTMLSelectElement;
-    // 1 placeholder + report layout + 8 comparison presets.
-    expect(select.options.length).toBe(10);
+    // 1 placeholder + final report layout + legacy report layout + 8
+    // comparison presets.
+    expect(select.options.length).toBe(11);
     fireEvent.change(select, { target: { value: 'glare-stress' } });
     expect(props.onApplyPreset).toHaveBeenCalledWith('glare-stress');
   });
