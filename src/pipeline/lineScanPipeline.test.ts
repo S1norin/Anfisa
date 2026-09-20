@@ -12,7 +12,7 @@ import type { LabelInstance, ParcelState } from '../domain/types';
 import { associateLineStrip } from './association';
 import { ParcelPipeline } from './pipeline';
 import { feedAcquisition } from './feedCapture';
-import { reportSixViewConfig } from '../capture/presets';
+import { reportEightReaderConfig } from '../capture/presets';
 import { stripBufferPool } from '../capture/frameBuffer';
 import { buildStripTexture } from '../capture/stripPreview';
 import { ProcessRun } from './runDriver';
@@ -26,8 +26,18 @@ import { SimStore } from '../store/simStore';
 
 const PLANE_Z = 1100;
 
+// Test rigs use the report line geometry (715 mm scan-plane FOV over the
+// 650 mm belt, margin 65 mm; 50 µs global line exposure — floor of the
+// report band) so the coverage and quality ramps pass — see t2-lineobs.
 function topRig(): ReturnType<typeof defaultLineScanRig> {
-  return defaultLineScanRig('LS-001', 'TOP', [0, 900, PLANE_Z], [0, 1, 0, 0], PLANE_Z);
+  return defaultLineScanRig(
+    'LS-001',
+    'TOP',
+    [0, 900, PLANE_Z],
+    [0, 1, 0, 0],
+    PLANE_Z,
+    { fovWidthMm: 715, lineExposureUs: 50 },
+  );
 }
 
 function bottomRig(): ReturnType<typeof defaultLineScanRig> {
@@ -37,6 +47,7 @@ function bottomRig(): ReturnType<typeof defaultLineScanRig> {
     [0, -900, 1100],
     [0, -1, 0, 0],
     1100,
+    { fovWidthMm: 715, lineExposureUs: 50 },
   );
 }
 
@@ -94,6 +105,9 @@ function lineFeed(
 ): Parameters<typeof feedAcquisition>[0] {
   const cfg = defaultConfig();
   cfg.cameraRigs = [topRig()];
+  // Report line geometry needs the report's blur target (715 mm/8192 px
+  // scan plane at 50 µs / 1 m/s) — see reportEightReaderConfig.
+  cfg.quality = reportEightReaderConfig().quality;
   const a = makeParcel('P-A', 1200, 500, [label('L-0001', 'KTY-1', 'TOP')]);
   return {
     kind: 'LINE_STRIP',
@@ -196,7 +210,9 @@ describe('feedAcquisition LINE_STRIP dispatch (t6)', () => {
       expect(o.face).toBe('TOP');
       expect(o.decoded).toBe(true);
       expect(o.qualityPassed).toBe(true);
-      expect(o.ppm).toBeCloseTo(10, 6); // effective ppm (t3: 1/0.1)
+      // Effective ppm at the default 0.3 mm module: cross-belt
+      // 0.3/(715/8192)=3.43 vs travel 0.3/0.1=3.0 → bottleneck 3.0.
+      expect(o.ppm).toBeCloseTo(3.0, 6);
     }
     expect(out.stats.observations).toBe(2);
     expect(out.stats.decoded).toBe(2);
@@ -300,7 +316,7 @@ describe('feedAcquisition LINE_STRIP dispatch (t6)', () => {
 const PARCELS = 10;
 
 function lineCfg(): SimConfig {
-  const cfg = reportSixViewConfig();
+  const cfg = reportEightReaderConfig();
   cfg.seed = 2026;
   cfg.belt.speedMmPerSec = 1000;
   cfg.parcel.labelCountMin = 1;

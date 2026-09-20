@@ -11,8 +11,10 @@
  * strip → label decode mapping is t6.
  *
  * Labelled simulation assumptions (model shapes, not thresholds):
- *  - A line rig sees the parcel's full cross-belt width (inFov = true)
- *    and faces on at 0° with fixed focus (incidenceDeg = 0, focusPx = 0).
+ *  - A line rig faces on at 0° with fixed focus (incidenceDeg = 0,
+ *    focusPx = 0). In-FOV is NOT assumed: the scan-plane FOV must cover
+ *    the configured belt plus `coverageMarginMm`, else the strip is
+ *    OUT_OF_FOV (reject coverage, never silently shrink it).
  *  - Parcel-on-parcel occlusion is not modelled for line strips; the only
  *    occlusion is the solid station deck under BOTTOM strips (the caller
  *    passes `deckOccluded`, mirroring stationDeckOccludesBottom for area
@@ -47,12 +49,25 @@ export interface LineScanStripStatus {
   abortReason?: string;
 }
 
+/**
+ * Minimum margin the scan-plane FOV must exceed the belt by, mm.
+ * The report requirement: 715 mm FOV covers the 650 mm belt with 65 mm
+ * spare (src/report/reportSpec.ts, REPORT_LINE.fovMarginMm).
+ */
+export const DEFAULT_LINE_FOV_MARGIN_MM = 65;
+
 export interface LineScanObservationInput {
   rig: LineScanCameraConfig;
   parcel: ParcelState;
   strip: LineScanStripStatus;
   simTimeMs: number;
   beltSpeedMmPerSec: number;
+  /** Configured barcode module width, mm (drives ppm on both axes). */
+  xDimensionMm: number;
+  /** Belt width across the scanner, mm (FOV coverage gate). */
+  beltWidthMm: number;
+  /** Required margin beyond the belt the FOV must cover, mm. */
+  coverageMarginMm: number;
   /** Solid deck under the parcel's z-interval at the scan plane (BOTTOM). */
   deckOccluded: boolean;
   /** Rig OFFLINE/FAULT at strip closure. */
@@ -76,6 +91,8 @@ export interface LineScanStripObservation {
   effectivePpm: number;
   /** Belt-imposed line rate, lines/s (compared against the rig cap). */
   requiredLineRate: number;
+  /** Belt-motion blur during the line exposure, px (object-space pitch). */
+  blurPx: number;
   /** Shared-model quality decision, extended with line hard gates. */
   quality: QualityResult;
   /** Canonical reason codes (PIPE-005), extended with line gates. */
@@ -89,12 +106,14 @@ function clamp01(x: number): number {
 }
 
 /**
- * Exposure-driven line contrast proxy, 0..1: 1 at the 25 µs nominal
- * exposure; under- and over-exposure each reduce contrast linearly.
- * (Model shape only — the decision thresholds stay in quality.ts.)
+ * Exposure-driven line contrast proxy, 0..1: 1 at the 75 µs nominal
+ * exposure (the report preset, within the 50–100 µs global-shutter band);
+ * under- and over-exposure each reduce contrast linearly. The whole
+ * report band (50–100 µs) stays ≥ 0.67. (Model shape only — the decision
+ * thresholds stay in quality.ts.)
  */
 function lineContrastProxy(lineExposureUs: number): number {
-  const e = lineExposureUs / 25; // 25 µs nominal (line-scan builder default)
+  const e = lineExposureUs / 75; // 75 µs nominal (report preset)
   return clamp01(1 - Math.abs(e - 1));
 }
 
@@ -126,10 +145,15 @@ export function observeLineScanStrip(
     rig.line;
   const requiredRate = requiredLineRate(input.beltSpeedMmPerSec, encoderStepMmPerLine);
   const underSampled = requiredRate > rig.line.maxLineRateLinesPerSec;
-  // xDimensionMm = 1 mm normalizes both axes to per-module density;
-  // the encoder span [encoderStartMm, encoderEndMm] is reported in the
-  // observation for audit (encoder-corrected travel).
-  const ppm = effectivePpm(1, pixelsPerLine, fovWidthMm, encoderStepMmPerLine);
+  // Configured module width drives ppm on both axes; the encoder span
+  // [encoderStartMm, encoderEndMm] is reported in the observation for
+  // audit (encoder-corrected travel).
+  const ppm = effectivePpm(
+    input.xDimensionMm,
+    pixelsPerLine,
+    fovWidthMm,
+    encoderStepMmPerLine,
+  );
   const blurPx =
     (input.beltSpeedMmPerSec * (lineExposureUs / 1e6)) /
     pixelPitchMm(pixelsPerLine, fovWidthMm);
@@ -137,8 +161,12 @@ export function observeLineScanStrip(
     ? 1
     : clamp01(strip.lineCount / Math.max(1, strip.expectedLineCount));
 
+  // Coverage gate: the scan-plane FOV must cover the belt plus margin.
+  // Reject (OUT_OF_FOV) when it does not — never silently shrink coverage.
+  const inFov = fovWidthMm >= input.beltWidthMm + input.coverageMarginMm;
+
   const qi: ReasonInput = {
-    inFov: true,
+    inFov,
     frontFacing: true,
     occluded: false,
     cameraFault: input.cameraFault,
@@ -180,6 +208,7 @@ export function observeLineScanStrip(
       : {}),
     effectivePpm: ppm,
     requiredLineRate: requiredRate,
+    blurPx,
     quality: { ...q, gateFailures, reasons, passed },
     reasons,
     decodable: passed,

@@ -258,6 +258,11 @@ export function reportEightReaderConfig(): SimConfig {
   // The report's bottom view requires the 100 mm transfer opening.
   cfg.station.bottomTransfer = 'GAP';
   cfg.barcode.xDimensionMm = REPORT_BARCODE.xDimensionMm;
+  // The 715 mm / 8192 px scan plane (0.0873 mm/px) moves ~40% more per
+  // pixel than the legacy 512 mm line: at the report's 50 µs line
+  // exposure and 1 m/s the belt blur is 0.57 px, so the blur target moves
+  // with the geometry (max stays 1.0 px = ~0.087 mm of belt travel).
+  cfg.quality.blurPxTarget = 0.6;
 
   const station: StationGeometry = {
     lengthMm: cfg.station.lengthMm,
@@ -308,7 +313,10 @@ export function reportEightReaderConfig(): SimConfig {
     fovWidthMm: REPORT_LINE.fovWidthMm,
     encoderStepMmPerLine: REPORT_LINE.encoderStepMmPerLine,
     maxLineRateLinesPerSec: REPORT_LINE.maxLineRateLinesPerSec,
-    lineExposureUs: REPORT_SIDE.exposureUsPreset,
+    // 50 µs — floor of the report 50–100 µs global-shutter band: keeps
+    // belt-motion blur under the blurPxTarget ramp at the 1 m/s operating
+    // speed (0.57 px vs 0.86 px at 75 µs).
+    lineExposureUs: REPORT_SIDE.exposureUsMin,
   };
   const top = defaultLineScanRig(
     'CAM-007',

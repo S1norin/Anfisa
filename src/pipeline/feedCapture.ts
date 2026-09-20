@@ -21,6 +21,7 @@ import type { ParcelPipeline, ProcessedFrameStats } from './pipeline';
 import { expectedLineCount } from '../capture/lineScanGeometry';
 import { stationDeckOccludesBottomStrip } from '../observation/occlusion';
 import {
+  DEFAULT_LINE_FOV_MARGIN_MM,
   observeLineScanStrip,
   type LineScanStripStatus,
 } from '../observation/lineScanObservation';
@@ -209,6 +210,9 @@ function feedLineStrip(
       strip,
       simTimeMs: input.simTimeMs,
       beltSpeedMmPerSec: input.speedMmPerSec,
+      xDimensionMm: input.config.barcode.xDimensionMm,
+      beltWidthMm: input.config.belt.widthMm,
+      coverageMarginMm: DEFAULT_LINE_FOV_MARGIN_MM,
       deckOccluded:
         rig.role === 'BOTTOM'
           ? stationDeckOccludesBottomStrip(input.config, parcel)

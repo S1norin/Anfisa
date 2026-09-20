@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { recommendedSixViewConfig, reportSixViewConfig } from '../capture/presets';
+import { reportEightReaderConfig, recommendedSixViewConfig } from '../capture/presets';
 import { defaultConfig } from '../domain/config';
 import type { SimConfig } from '../domain/config';
 import type {
@@ -416,11 +416,13 @@ describe('AC-07: close spacing and speed change stay consistent', () => {
  * 10 parcels (probed; other seeds can have zero top labels).
  */
 describe('t7: line-scan e2e acceptance (report layout)', () => {
-  const TOP = 'CAM-005';
-  const BOTTOM = 'CAM-006';
+  // Final report layout (t1-preset8): six side readers + TOP/BOTTOM line
+  // scanners. Line scanner ids are CAM-007/CAM-008 in that layout.
+  const TOP = 'CAM-007';
+  const BOTTOM = 'CAM-008';
 
   function lineCfg(seed = 7): SimConfig {
-    const cfg = reportSixViewConfig();
+    const cfg = reportEightReaderConfig();
     cfg.seed = seed;
     cfg.parcel.tapeChance = 0;
     cfg.parcel.labelDamageChance = 0;

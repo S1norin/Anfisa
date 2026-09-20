@@ -9,16 +9,36 @@
  *  5. quality reuses evaluateQuality: shared-model gates (OUT_OF_FOV via
  *     coverageMin) appear in the line observation — no duplicated
  *     thresholds.
+ *  6. report preset (0.35 mm, 715 mm) → 3.5 ppm, 10 kHz < 12 kHz,
+ *     decodable; 1.5 m/s → deterministic LOW_PPM.
+ *  7. configured module width drives ppm (0.7 mm → 7.0 travel ppm).
+ *  8. FOV narrower than belt + margin → OUT_OF_FOV, not decodable.
+ *  9. blur uses the object-space pitch fovWidthMm/pixelsPerLine.
  */
 
 import { describe, expect, it } from 'vitest';
 import { defaultConfig, GAP_OPENING_MM } from '../domain/config';
 import { defaultLineScanRig } from '../domain/camera';
+import { reportEightReaderConfig } from '../capture/presets';
+import { pixelPitchMm } from '../capture/lineScanGeometry';
 import type { ParcelSpec, ParcelState } from '../domain/types';
-import { observeLineScanStrip, type LineScanStripStatus } from './lineScanObservation';
+import {
+  DEFAULT_LINE_FOV_MARGIN_MM,
+  observeLineScanStrip,
+  type LineScanStripStatus,
+} from './lineScanObservation';
 import { stationDeckOccludesBottomStrip } from './occlusion';
 
 const BELT_MM_S = 1000;
+
+/** Report line-scan rig: 715 mm scan-plane FOV, 8192 px, 0.1 mm step,
+ * 50 µs global line exposure (floor of the report 50–100 µs band). */
+function reportRig(role: 'TOP' | 'BOTTOM' = 'TOP') {
+  return defaultLineScanRig('LS-001', role, [0, 900, 1100], [0, 1, 0, 0], 1100, {
+    fovWidthMm: 715,
+    lineExposureUs: 50,
+  });
+}
 
 function makeParcel(id: string, overrides: Partial<ParcelSpec> = {}): ParcelState {
   return {
@@ -51,20 +71,25 @@ function completeStrip(): LineScanStripStatus {
   };
 }
 
+const REPORT_THRESHOLDS = reportEightReaderConfig().quality;
+
 function observe(
   overrides: Partial<Parameters<typeof observeLineScanStrip>[0]> = {},
 ) {
   const cfg = defaultConfig();
-  const rig = defaultLineScanRig('LS-001', 'TOP', [0, 900, 1100], [0, 1, 0, 0], 1100);
   return observeLineScanStrip({
-    rig,
+    rig: reportRig(),
     parcel: makeParcel('P-0001'),
     strip: completeStrip(),
     simTimeMs: 4100,
     beltSpeedMmPerSec: BELT_MM_S,
+    xDimensionMm: cfg.barcode.xDimensionMm,
+    beltWidthMm: cfg.belt.widthMm,
+    coverageMarginMm: DEFAULT_LINE_FOV_MARGIN_MM,
     deckOccluded: false,
     cameraFault: false,
-    thresholds: cfg.quality,
+    // Report geometry needs the report's blur target (see preset).
+    thresholds: REPORT_THRESHOLDS,
     seed: 2026,
     ...overrides,
   });
@@ -77,9 +102,9 @@ describe('line-scan strip observation (t5)', () => {
     expect(obs.cameraId).toBe('LS-001');
     expect(obs.face).toBe('TOP');
     expect(obs.complete).toBe(true);
-    // Cross-belt: 8192 px / 512 mm = 16 ppm; travel: 1 / 0.1 = 10 ppm.
-    // Effective (bottleneck) = 10.
-    expect(obs.effectivePpm).toBeCloseTo(10, 6);
+    // Default 0.3 mm module, 715 mm FOV: cross-belt 0.3/(715/8192)=3.43,
+    // travel 0.3/0.1=3.0 → effective (bottleneck) = 3.0.
+    expect(obs.effectivePpm).toBeCloseTo(3.0, 6);
     expect(obs.requiredLineRate).toBeCloseTo(10000, 6); // 1000 / 0.1
     expect(obs.quality.passed).toBe(true);
     expect(obs.decodable).toBe(true);
@@ -161,5 +186,71 @@ describe('line-scan strip observation (t5)', () => {
 
   it('deterministic: identical inputs → identical observations', () => {
     expect(observe()).toEqual(observe());
+  });
+});
+
+describe('report-aligned line observation (t2-lineobs)', () => {
+  // The preset ships report-aligned quality thresholds (blur target 0.6
+  // px for the 0.0873 mm/px scan plane at 50 µs / 1 m/s).
+  const reportQuality = reportEightReaderConfig().quality;
+
+  it('report preset at 1 m/s: 3.5 ppm (travel-limited), 10 kHz < 12 kHz, decodable', () => {
+    const obs = observe({
+      xDimensionMm: 0.35,
+      // 0.35 mm / 0.1 mm = 3.5 travel; 0.35 / (715/8192) = 4.01 cross-belt.
+      thresholds: reportQuality,
+    })!;
+    expect(obs.effectivePpm).toBeCloseTo(3.5, 6);
+    expect(obs.requiredLineRate).toBeCloseTo(10000, 6);
+    expect(obs.quality.gateFailures).toEqual([]);
+    expect(obs.quality.passed).toBe(true);
+    expect(obs.decodable).toBe(true);
+    expect(obs.reasons).not.toContain('LOW_PPM');
+    expect(obs.reasons).not.toContain('OUT_OF_FOV');
+  });
+
+  it('at 1.5 m/s the same rig fails deterministically with LOW_PPM', () => {
+    const obs = observe({ xDimensionMm: 0.35, beltSpeedMmPerSec: 1500 })!;
+    expect(obs.requiredLineRate).toBeCloseTo(15000, 6); // > 12 000 cap
+    expect(obs.quality.gateFailures).toContain('LOW_PPM');
+    expect(obs.reasons).toContain('LOW_PPM');
+    expect(obs.decodable).toBe(false);
+  });
+
+  it('changing the configured module width changes ppm proportionally', () => {
+    const obs = observe({ xDimensionMm: 0.7 })!;
+    // travel: 0.7 / 0.1 = 7.0 (cross-belt 8.15) → effective 7.0.
+    expect(obs.effectivePpm).toBeCloseTo(7.0, 6);
+  });
+
+  it('FOV narrower than belt + margin → OUT_OF_FOV, not decodable', () => {
+    const narrow = defaultLineScanRig(
+      'LS-001',
+      'TOP',
+      [0, 900, 1100],
+      [0, 1, 0, 0],
+      1100,
+      { fovWidthMm: 500 }, // 500 < 650 + 65
+    );
+    const obs = observe({ rig: narrow })!;
+    expect(obs.quality.gateFailures).toContain('OUT_OF_FOV');
+    expect(obs.reasons).toContain('OUT_OF_FOV');
+    expect(obs.decodable).toBe(false);
+  });
+
+  it('blurPx uses the object-space pitch fovWidthMm/pixelsPerLine', () => {
+    const rig = defaultLineScanRig(
+      'LS-001',
+      'TOP',
+      [0, 900, 1100],
+      [0, 1, 0, 0],
+      1100,
+      { fovWidthMm: 715, lineExposureUs: 100 },
+    );
+    const obs = observe({ rig, beltSpeedMmPerSec: 1000 })!;
+    // 1000 mm/s × 100 µs / (715/8192 mm/px) = 0.1 / 0.08728 ≈ 1.146 px.
+    const expected = (1000 * (100 / 1e6)) / pixelPitchMm(8192, 715);
+    expect(obs.blurPx).toBeCloseTo(expected, 9);
+    expect(obs.blurPx).toBeCloseTo(1.146, 2);
   });
 });
