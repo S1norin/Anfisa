@@ -45,7 +45,9 @@ export type AssociationMismatch =
   | 'PARCEL_UNKNOWN'
   | 'GHOST_INSTANCE'
   | 'POSITION_OUT_OF_WINDOW'
-  | 'TIME_OUT_OF_WINDOW';
+  | 'TIME_OUT_OF_WINDOW'
+  /** Line strip's encoder interval overlapped zero/multiple parcels (t6). */
+  | 'INTERVAL_AMBIGUOUS';
 
 /** Per physical-label-instance result (audit-facing: ground truth allowed). */
 export interface LabelResult {

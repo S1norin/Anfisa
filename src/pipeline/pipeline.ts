@@ -10,13 +10,19 @@
 import type { SimConfig } from '../domain/config';
 import type {
   CameraState,
+  Face,
   ParcelResult,
   ParcelState,
   SimEvent,
 } from '../domain/types';
 import { decodeObservation } from './decoder';
-import { associateObservation, DEFAULT_ASSOCIATION_WINDOWS } from './association';
+import {
+  associateLineStrip,
+  associateObservation,
+  DEFAULT_ASSOCIATION_WINDOWS,
+} from './association';
 import type { AssociationWindows } from './association';
+import type { LineScanStripObservation } from '../observation/lineScanObservation';
 import {
   addObservation,
   newAggregate,
@@ -49,6 +55,24 @@ interface ParcelStats {
   aggregate: ParcelAggregate;
   totalObservations: number;
   faultedObservations: number;
+}
+
+/**
+ * A closed line-scan strip that reached the pipeline (t6): the session's
+ * encoder interval + the t5 strip observation (null when the deck fully
+ * occluded it — nothing observed, nothing decoded).
+ */
+export interface PipelineLineStrip {
+  frameId: string;
+  cameraId: string;
+  simTimeMs: number;
+  encoderStartMm: number;
+  encoderEndMm: number;
+  scanPlaneZMm: number;
+  /** Parcel the scan session attributed the strip to. */
+  parcelId: string;
+  face: Face;
+  observation: LineScanStripObservation | null;
 }
 
 export interface ProcessedFrameStats {
@@ -132,6 +156,92 @@ export class ParcelPipeline {
       stats.mismatches += s.aggregate.mismatches.length - before;
       stats.observations += 1;
       if (decode.decoded && assoc.ok) stats.decoded += 1;
+    }
+    return stats;
+  }
+
+  /**
+   * Run one closed line strip through interval-associate → decode →
+   * deduplicate → aggregate (t6). The strip-level quality decision (t5)
+   * applies to every label on the strip face: one strip yields one
+   * observation per face label, exactly like the area path.
+   */
+  processLineStrip(
+    strip: PipelineLineStrip,
+    now: { simTimeMs: number; encoderMm: number },
+    parcels: Iterable<ParcelState>,
+    windows: AssociationWindows = DEFAULT_ASSOCIATION_WINDOWS,
+  ): ProcessedFrameStats {
+    // Materialize: the iterable may be a single-pass Map view.
+    const parcelList = [...parcels];
+    const byId = new Map<string, ParcelState>();
+    for (const p of parcelList) byId.set(p.parcelId, p);
+    const parcel = byId.get(strip.parcelId);
+
+    const stats = {
+      frameId: strip.frameId,
+      observations: 0,
+      decoded: 0,
+      mismatches: 0,
+    };
+    const s = this.getStats(strip.parcelId);
+
+    const assoc = associateLineStrip(
+      {
+        simTimeMs: strip.simTimeMs,
+        encoderStartMm: strip.encoderStartMm,
+        encoderEndMm: strip.encoderEndMm,
+      },
+      parcel,
+      parcelList,
+      strip.scanPlaneZMm,
+      now,
+      windows,
+    );
+
+    const obs = strip.observation;
+    // Association failures are always recorded (even for null/deck-
+    // occluded observations) so the AMBIGUOUS policy applies; a missing
+    // observation simply yields no decodes.
+    if (!assoc.ok) {
+      const before = s.aggregate.mismatches.length;
+      s.aggregate.mismatches.push(assoc.mismatch ?? 'INTERVAL_AMBIGUOUS');
+      stats.mismatches += s.aggregate.mismatches.length - before;
+      return stats;
+    }
+    if (!parcel || !obs) return stats;
+
+    const labels = parcel.spec.labels.filter((l) => l.face === obs.face);
+
+    for (const label of labels) {
+      const payload = label.payload;
+      const decode = {
+        labelInstanceId: label.labelInstanceId,
+        decoded: obs.decodable,
+        decodedPayload: obs.decodable ? payload : undefined,
+        confidence: obs.decodable ? obs.quality.quality : 0,
+        reasons: obs.reasons,
+      };
+
+      s.totalObservations += 1;
+      if (obs.reasons.includes('CAMERA_FAULT')) s.faultedObservations += 1;
+
+      const before = s.aggregate.mismatches.length;
+      addObservation(s.aggregate, {
+        parcelId: parcel.parcelId,
+        labelInstanceId: label.labelInstanceId,
+        face: obs.face,
+        payload,
+        confidence: decode.confidence,
+        reasons: obs.reasons,
+        cameraId: strip.cameraId,
+        simTimeMs: strip.simTimeMs,
+        decode,
+        association: assoc,
+      });
+      stats.mismatches += s.aggregate.mismatches.length - before;
+      stats.observations += 1;
+      if (decode.decoded) stats.decoded += 1;
     }
     return stats;
   }

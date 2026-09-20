@@ -18,6 +18,13 @@ import type { SimConfig } from '../domain/config';
 import type { CameraState, ParcelState } from '../domain/types';
 import { decodeObservation } from './decoder';
 import type { ParcelPipeline, ProcessedFrameStats } from './pipeline';
+import { expectedLineCount } from '../capture/lineScanGeometry';
+import { stationDeckOccludesBottomStrip } from '../observation/occlusion';
+import {
+  observeLineScanStrip,
+  type LineScanStripStatus,
+} from '../observation/lineScanObservation';
+import type { LineScanAbortReason } from '../capture/lineScanner';
 
 export interface FeedCaptureInput {
   cameraId: string;
@@ -50,10 +57,61 @@ export function feedCaptureEvent(
   input: FeedCaptureInput,
   pipeline: ParcelPipeline,
 ): FeedCaptureOutput {
+  return feedAcquisition({ ...input, kind: 'AREA_FRAME' }, pipeline);
+}
+
+/**
+ * One closed line-scan strip (t6): the bounded t4 event payload — session
+ * attribution + encoder interval — plus the same run context the area
+ * path carries.
+ */
+export interface FeedLineStripInput {
+  kind: 'LINE_STRIP';
+  cameraId: string;
+  simTimeMs: number;
+  encoderMm: number;
+  /** Parcel the scan session attributed the strip to. */
+  parcelId: string;
+  encoderStartMm: number;
+  encoderEndMm: number;
+  lineCount: number;
+  complete: boolean;
+  abortReason?: LineScanAbortReason;
+  config: SimConfig;
+  parcels: Map<string, ParcelState>;
+  cameraState: CameraState;
+  /** Belt speed for the line-quality proxies (SIM-004). */
+  speedMmPerSec: number;
+}
+
+/** Discriminated acquisition union (t6): dispatch by rig kind. */
+export type FeedAcquisitionInput =
+  | (FeedCaptureInput & { kind: 'AREA_FRAME' })
+  | FeedLineStripInput;
+
+/**
+ * Dispatch one acquisition — area frame or line strip — through the
+ * shared engine → decode → associate → aggregate path. Both consumers
+ * (SimStore, ProcessRun) call exactly this so live and headless runs stay
+ * byte-identical (NFR-006).
+ */
+export function feedAcquisition(
+  input: FeedAcquisitionInput,
+  pipeline: ParcelPipeline,
+): FeedCaptureOutput {
+  return input.kind === 'LINE_STRIP'
+    ? feedLineStrip(input, pipeline)
+    : feedAreaFrame(input, pipeline);
+}
+
+function feedAreaFrame(
+  input: FeedCaptureInput,
+  pipeline: ParcelPipeline,
+): FeedCaptureOutput {
   const frameId = input.frameId ?? `${input.cameraId}@${input.simTimeMs}`;
   const rig = input.config.cameraRigs.find((r) => r.id === input.cameraId);
   if (!rig) return { observations: [], stats: EMPTY_STATS(frameId) };
-  // Area-scan frame path; line-scan strips arrive via their own events (t6).
+  // Area-scan frame path only (strips dispatch via feedLineStrip).
   if (rig.kind !== 'AREA_SCAN') return { observations: [], stats: EMPTY_STATS(frameId) };
 
   const candidates = input.candidateParcelIds
@@ -111,6 +169,95 @@ export function feedCaptureEvent(
     { simTimeMs: input.simTimeMs, encoderMm: input.encoderMm },
     allParcels,
   );
+
+  return { observations, stats };
+}
+
+/**
+ * Feed one closed line strip (t5 observation → per-face-label expansion →
+ * interval association → aggregate). A deck-occluded strip (t5 null) and
+ * a retired parcel produce NO observations and NO decodes — never a
+ * fabricated read.
+ */
+function feedLineStrip(
+  input: FeedLineStripInput,
+  pipeline: ParcelPipeline,
+): FeedCaptureOutput {
+  const frameId = `${input.cameraId}@${input.simTimeMs}`;
+  const rig = input.config.cameraRigs.find((r) => r.id === input.cameraId);
+  if (!rig || rig.kind !== 'LINE_SCAN') {
+    return { observations: [], stats: EMPTY_STATS(frameId) };
+  }
+  const parcel = input.parcels.get(input.parcelId);
+
+  let stripObs = null;
+  if (parcel) {
+    const travelMm = input.encoderEndMm - input.encoderStartMm;
+    const strip: LineScanStripStatus = {
+      encoderStartMm: input.encoderStartMm,
+      encoderEndMm: input.encoderEndMm,
+      lineCount: input.lineCount,
+      expectedLineCount: expectedLineCount(travelMm, rig.line.encoderStepMmPerLine),
+      complete: input.complete,
+      ...(input.abortReason !== undefined
+        ? { abortReason: input.abortReason }
+        : {}),
+    };
+    stripObs = observeLineScanStrip({
+      rig,
+      parcel,
+      strip,
+      simTimeMs: input.simTimeMs,
+      beltSpeedMmPerSec: input.speedMmPerSec,
+      deckOccluded:
+        rig.role === 'BOTTOM'
+          ? stationDeckOccludesBottomStrip(input.config, parcel)
+          : false,
+      cameraFault:
+        input.cameraState === 'FAULT' || input.cameraState === 'OFFLINE',
+      thresholds: input.config.quality,
+      seed: input.config.seed,
+    });
+  }
+
+  const stats = pipeline.processLineStrip(
+    {
+      frameId,
+      cameraId: input.cameraId,
+      simTimeMs: input.simTimeMs,
+      encoderStartMm: input.encoderStartMm,
+      encoderEndMm: input.encoderEndMm,
+      scanPlaneZMm: rig.line.scanPlaneZMm,
+      parcelId: input.parcelId,
+      face: rig.role === 'BOTTOM' ? 'BOTTOM' : 'TOP',
+      observation: stripObs,
+    },
+    { simTimeMs: input.simTimeMs, encoderMm: input.encoderMm },
+    input.parcels.values(),
+  );
+
+  const observations: RunObservationMeta[] = [];
+  if (parcel && stripObs) {
+    for (const label of parcel.spec.labels) {
+      if (label.face !== stripObs.face) continue;
+      observations.push({
+        frameId,
+        cameraId: input.cameraId,
+        simTimeMs: input.simTimeMs,
+        parcelId: parcel.parcelId,
+        labelInstanceId: label.labelInstanceId,
+        face: stripObs.face,
+        material: parcel.spec.material,
+        rotationDeg: label.rotationDeg,
+        ppm: stripObs.effectivePpm,
+        incidenceDeg: 0,
+        confidence: stripObs.quality.quality,
+        qualityPassed: stripObs.quality.passed,
+        decoded: stripObs.decodable,
+        reasons: stripObs.reasons,
+      });
+    }
+  }
 
   return { observations, stats };
 }

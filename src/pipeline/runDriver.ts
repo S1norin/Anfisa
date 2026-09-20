@@ -15,7 +15,7 @@ import type { Face } from '../domain/types';
 import type { SimConfig } from '../domain/config';
 import { Simulation } from '../simulation/sim';
 import { ParcelPipeline } from './pipeline';
-import { feedCaptureEvent } from './feedCapture';
+import { feedAcquisition, feedCaptureEvent } from './feedCapture';
 import {
   buildRunRecord,
   type RunFrameMeta,
@@ -58,6 +58,14 @@ export class ProcessRun {
     for (const e of s.events.slice(before)) {
       if (e.type === 'PARCEL_SPAWNED') this.spawnedCount += 1;
       if (e.type === 'CAMERA_CAPTURED') this.feedCapture(e);
+      // Bounded line-scan lifecycle (t4): only terminal events carry the
+      // strip interval — STARTED is skipped by both consumers.
+      if (
+        e.type === 'LINE_SCAN_COMPLETED' ||
+        e.type === 'LINE_SCAN_ABORTED'
+      ) {
+        this.feedLineStrip(e);
+      }
     }
     this.pipeline.finalizeDue(s.simTimeMs, s.config, s.parcels.values());
     this.pipeline.ackDue(s.simTimeMs, s.config.ackLatencyMs);
@@ -118,6 +126,57 @@ export class ProcessRun {
         simTimeMs: e.simTimeMs,
         encoderMm: s.encoderMm,
         candidateParcelIds: e.candidateParcelIds,
+        config: s.config,
+        parcels: s.parcels,
+        cameraState: s.cameraStates[rig.id] ?? 'OFFLINE',
+        speedMmPerSec: s.speedMmPerSec,
+      },
+      this.pipeline,
+    );
+    this.observations.push(...out.observations);
+    this.totalDecodedObservations += out.observations.filter((o) => o.decoded).length;
+    this.totalMismatches += out.stats.mismatches;
+  }
+
+  /**
+   * Feed one closed line strip through the SAME glue as the live store
+   * (feedAcquisition), so headless and live runs stay byte-identical
+   * (NFR-006).
+   */
+  private feedLineStrip(e: {
+    type: 'LINE_SCAN_COMPLETED' | 'LINE_SCAN_ABORTED';
+    cameraId: string;
+    parcelId: string;
+    simTimeMs: number;
+    encoderStartMm: number;
+    encoderEndMm: number;
+    lineCount: number;
+    complete: boolean;
+    reason?: 'CAMERA_FAULT' | 'CLOSE_SPACING' | 'MAX_STRIP';
+  }): void {
+    const s = this.sim.state;
+    const rig = s.config.cameraRigs.find((r) => r.id === e.cameraId);
+    this.frames.push({
+      frameId: `${e.cameraId}@${e.simTimeMs}`,
+      cameraId: e.cameraId,
+      simTimeMs: e.simTimeMs,
+      encoderMm: s.encoderMm,
+      candidateParcelIds: [e.parcelId],
+    });
+    if (!rig) return;
+
+    const out = feedAcquisition(
+      {
+        kind: 'LINE_STRIP',
+        cameraId: e.cameraId,
+        simTimeMs: e.simTimeMs,
+        encoderMm: s.encoderMm,
+        parcelId: e.parcelId,
+        encoderStartMm: e.encoderStartMm,
+        encoderEndMm: e.encoderEndMm,
+        lineCount: e.lineCount,
+        complete: e.complete,
+        ...(e.reason !== undefined ? { abortReason: e.reason } : {}),
         config: s.config,
         parcels: s.parcels,
         cameraState: s.cameraStates[rig.id] ?? 'OFFLINE',

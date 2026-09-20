@@ -6,7 +6,7 @@ import type { Face, ParcelResult, SimEvent } from '../domain/types';
 import { reportSixViewConfig } from '../capture/presets';
 import type { RunObservationMeta } from '../metrics/runRecord';
 import { computeRunMetrics, type RunMetrics } from '../metrics/metrics';
-import { feedCaptureEvent } from '../pipeline/feedCapture';
+import { feedAcquisition, feedCaptureEvent } from '../pipeline/feedCapture';
 import { ParcelPipeline } from '../pipeline/pipeline';
 import type { ParcelAggregate } from '../pipeline/aggregation';
 import { Simulation } from '../simulation/sim';
@@ -181,6 +181,36 @@ export class SimStore {
             simTimeMs: ev.simTimeMs,
             encoderMm: s.encoderMm,
             candidateParcelIds: ev.candidateParcelIds,
+            config: s.config,
+            parcels: s.parcels,
+            cameraState: s.cameraStates[ev.cameraId] ?? 'OFFLINE',
+            speedMmPerSec: s.speedMmPerSec,
+          },
+          this.pipelineInstance,
+        );
+        this.observations.push(...out.observations);
+        this.decodedObservations += out.observations.filter((o) => o.decoded).length;
+        this.misassociations += out.stats.mismatches;
+      } else if (
+        ev.type === 'LINE_SCAN_COMPLETED' ||
+        ev.type === 'LINE_SCAN_ABORTED'
+      ) {
+        const rig = s.config.cameraRigs.find((r) => r.id === ev.cameraId);
+        if (!rig) continue;
+        const out = feedAcquisition(
+          {
+            kind: 'LINE_STRIP',
+            cameraId: ev.cameraId,
+            simTimeMs: ev.simTimeMs,
+            encoderMm: s.encoderMm,
+            parcelId: ev.parcelId,
+            encoderStartMm: ev.encoderStartMm,
+            encoderEndMm: ev.encoderEndMm,
+            lineCount: ev.lineCount,
+            complete: ev.complete,
+            ...(ev.type === 'LINE_SCAN_ABORTED'
+              ? { abortReason: ev.reason }
+              : {}),
             config: s.config,
             parcels: s.parcels,
             cameraState: s.cameraStates[ev.cameraId] ?? 'OFFLINE',
