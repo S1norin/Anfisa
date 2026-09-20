@@ -36,6 +36,36 @@ const TOGGLE_GROUPS: { key: keyof SchemaToggles; label: string }[] = [
   { key: 'labels', label: 'Label annotations' },
 ];
 
+const DISPLAY_PRESETS: { label: string; toggles: SchemaToggles }[] = [
+  { label: 'Overview', toggles: DEFAULT_SCHEMA_TOGGLES },
+  {
+    label: 'Cameras',
+    toggles: {
+      dimensions: false,
+      frusta: true,
+      scanZones: false,
+      focusPlanes: false,
+      axes: true,
+      roi: false,
+      arcs: false,
+      labels: false,
+    },
+  },
+  {
+    label: 'Inspect',
+    toggles: {
+      dimensions: true,
+      frusta: false,
+      scanZones: false,
+      focusPlanes: false,
+      axes: false,
+      roi: false,
+      arcs: true,
+      labels: true,
+    },
+  },
+];
+
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -66,15 +96,15 @@ export function SchemaView() {
   const liveParcels = [...parcels.values()];
   const parcel = liveParcels.length > 0 ? liveParcels[liveParcels.length - 1] : null;
 
-  const presetNames = Object.keys(
-    schemaPresets(config.station.lengthMm),
-  ) as SchemaPreset['name'][];
+  const presetNames = Object.keys(schemaPresets(config.station.lengthMm)) as SchemaPreset['name'][];
 
-  const toggle = (key: keyof SchemaToggles) =>
-    setToggles((t) => ({ ...t, [key]: !t[key] }));
+  const toggle = (key: keyof SchemaToggles) => setToggles((t) => ({ ...t, [key]: !t[key] }));
+
+  const presetIsActive = (preset: SchemaToggles) =>
+    (Object.keys(preset) as (keyof SchemaToggles)[]).every((key) => toggles[key] === preset[key]);
 
   const onExport = async () => {
-    const blob = await api?.exportPng() ?? null;
+    const blob = (await api?.exportPng()) ?? null;
     if (blob) {
       downloadBlob(blob, `schema-${presetName.toLowerCase()}-${sim.state.simTimeMs}ms.png`);
       setExportedMs(sim.state.simTimeMs);
@@ -116,11 +146,7 @@ export function SchemaView() {
             </button>
           </div>
           <div className="schema-toolbar-group" role="group" aria-label="Camera tools">
-            <button
-              type="button"
-              data-testid="schema-fit"
-              onClick={() => apiRef.current?.fit()}
-            >
+            <button type="button" data-testid="schema-fit" onClick={() => apiRef.current?.fit()}>
               Fit
             </button>
             <button
@@ -153,24 +179,40 @@ export function SchemaView() {
       <div className="view-panel schema-panel">
         <h2>Schema</h2>
         <p className="schema-hint">
-          Low-clutter schematic: dimensions, geometry, and readability context
-          for the <strong>{presetName}</strong> view.
+          Low-clutter schematic: dimensions, geometry, and readability context for the{' '}
+          <strong>{presetName}</strong> view.
         </p>
         <div className="op-card">
-          <h3>Display groups</h3>
-          <div className="schema-toggles" data-testid="schema-toggles">
-            {TOGGLE_GROUPS.map(({ key, label }) => (
-              <label key={key} className="schema-toggle">
-                <input
-                  type="checkbox"
-                  data-testid={`schema-toggle-${key}`}
-                  checked={toggles[key]}
-                  onChange={() => toggle(key)}
-                />
-                {label}
-              </label>
+          <h3>Display</h3>
+          <div className="schema-display-presets" role="group" aria-label="Display presets">
+            {DISPLAY_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                data-testid={`schema-display-${preset.label.toLowerCase()}`}
+                className={presetIsActive(preset.toggles) ? 'active' : ''}
+                onClick={() => setToggles({ ...preset.toggles })}
+              >
+                {preset.label}
+              </button>
             ))}
           </div>
+          <details className="schema-layers">
+            <summary>Layers</summary>
+            <div className="schema-toggles" data-testid="schema-toggles">
+              {TOGGLE_GROUPS.map(({ key, label }) => (
+                <label key={key} className="schema-toggle">
+                  <input
+                    type="checkbox"
+                    data-testid={`schema-toggle-${key}`}
+                    checked={toggles[key]}
+                    onChange={() => toggle(key)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </details>
         </div>
         <div className="op-card">
           <h3>Parcel</h3>

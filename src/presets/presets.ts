@@ -13,7 +13,12 @@
  * through the same normal processing path.
  */
 
-import { aim, recommendedSixViewConfig, recommendedSixViewRigs } from '../capture/presets';
+import {
+  aim,
+  recommendedSixViewConfig,
+  recommendedSixViewRigs,
+  reportSixViewConfig,
+} from '../capture/presets';
 import { defaultConfig, validateConfig, type SimConfig } from '../domain/config';
 import type { CameraConfig, CameraRole } from '../domain/types';
 import type { SimStore } from '../store/simStore';
@@ -44,8 +49,7 @@ function obliqueRigs(cfg: SimConfig): CameraConfig[] {
   const sin45 = Math.SQRT1_2;
   const cos45 = Math.SQRT1_2;
   const target: [number, number, number] = [0, midY, cz];
-  const by = (role: CameraRole) =>
-    recommendedSixViewRigs(cfg).find((r) => r.role === role)!;
+  const by = (role: CameraRole) => recommendedSixViewRigs(cfg).find((r) => r.role === role)!;
 
   return [
     aim(by('FRONT'), [wd * sin45, midY + wd * sin45, frontZ + wd * cos45], target),
@@ -60,6 +64,18 @@ function withRigs(cfg: SimConfig, rigs: CameraConfig[]): SimConfig {
 }
 
 export const PRESETS: readonly PresetDef[] = [
+  {
+    id: 'report-6view',
+    name: 'Report layout · 4 oblique + top/bottom',
+    description:
+      'The report design: four horizontal 45° side views, dedicated top/bottom readers, and two conveyor sections separated by a 100 mm optical gap.',
+    category: 'RIG',
+    build: (seed = DEFAULT_PRESET_SEED) => {
+      const cfg = reportSixViewConfig();
+      cfg.seed = seed;
+      return cfg;
+    },
+  },
   {
     id: 'recommended-6view',
     name: 'Recommended 6-view',

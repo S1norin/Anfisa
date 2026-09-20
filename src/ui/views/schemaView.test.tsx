@@ -20,13 +20,13 @@ const exportPngMock = mockApi.exportPng as ReturnType<typeof vi.fn>;
 vi.mock('../../scene/schemaScene', () => ({
   DEFAULT_SCHEMA_TOGGLES: {
     dimensions: true,
-    frusta: true,
-    scanZones: true,
+    frusta: false,
+    scanZones: false,
     focusPlanes: false,
     axes: false,
     roi: false,
-    arcs: true,
-    labels: true,
+    arcs: false,
+    labels: false,
   },
   SchemaScene: ({
     presetName,
@@ -88,10 +88,16 @@ describe('schema view', () => {
     ] as const) {
       expect(screen.getByTestId(`schema-toggle-${key}`)).toBeInTheDocument();
     }
-    // Defaults: focus planes + axes off, everything else on.
+    // Clean overview by default; detailed overlays are opt-in.
     expect(screen.getByTestId('schema-toggle-focusPlanes')).not.toBeChecked();
     expect(screen.getByTestId('schema-toggle-axes')).not.toBeChecked();
+    expect(screen.getByTestId('schema-toggle-frusta')).not.toBeChecked();
+    expect(screen.getByTestId('schema-toggle-labels')).not.toBeChecked();
     expect(screen.getByTestId('schema-toggle-dimensions')).toBeChecked();
+
+    expect(screen.getByTestId('schema-display-overview')).toBeInTheDocument();
+    expect(screen.getByTestId('schema-display-cameras')).toBeInTheDocument();
+    expect(screen.getByTestId('schema-display-inspect')).toBeInTheDocument();
 
     expect(screen.getByTestId('schema-freeze')).toBeInTheDocument();
     expect(screen.getByTestId('schema-step')).toBeDisabled(); // IDLE
@@ -104,8 +110,24 @@ describe('schema view', () => {
     fireEvent.click(screen.getByTestId('schema-toggle-frusta'));
     expect(screen.getByTestId('schema-scene')).toHaveAttribute(
       'data-toggles',
-      expect.stringContaining('"frusta":false'),
+      expect.stringContaining('"frusta":true'),
     );
+  });
+
+  it('offers readable display presets instead of enabling every layer', () => {
+    render(<SchemaView />);
+    expect(screen.getByTestId('schema-display-overview')).toHaveClass('active');
+
+    fireEvent.click(screen.getByTestId('schema-display-cameras'));
+    expect(screen.getByTestId('schema-scene')).toHaveAttribute(
+      'data-toggles',
+      expect.stringContaining('"axes":true'),
+    );
+    expect(screen.getByTestId('schema-scene')).toHaveAttribute(
+      'data-toggles',
+      expect.stringContaining('"dimensions":false'),
+    );
+    expect(screen.getByTestId('schema-display-cameras')).toHaveClass('active');
   });
 
   it('selecting a preset updates the scene preset', () => {

@@ -38,8 +38,7 @@ describe('station dimensions (§4 defaults)', () => {
 
     const grip = defaultConfig(); // SIDE_GRIP default
     expect(grip.station.bottomTransfer).toBe('SIDE_GRIP');
-    const expected =
-      2 * (650 / 2 + RAIL_OFFSET_MM - RAIL_WIDTH_MM / 2);
+    const expected = 2 * (650 / 2 + RAIL_OFFSET_MM - RAIL_WIDTH_MM / 2);
     expect(getStationDimensions(grip).bottomOpeningMm).toBe(expected);
   });
 });
@@ -60,6 +59,13 @@ describe('station geometry builder', () => {
     const sign = group.children.find((c) => c.name === 'sort-sign');
     expect(sign).toBeDefined();
     expect(sign!.position.z).toBeCloseTo(3.45, 6);
+  });
+
+  it('shows the controlled-light enclosure with roof and side fixtures', () => {
+    const group = buildStationGroup(defaultConfig());
+    expect(findParts(group, 'enclosure-panel')).toHaveLength(3);
+    expect(findParts(group, 'station-light')).toHaveLength(7);
+    expect(findParts(group, 'belt-edge')).toHaveLength(4);
   });
 
   it('SIDE_GRIP: no belt deck under the transfer zone, rails present', () => {

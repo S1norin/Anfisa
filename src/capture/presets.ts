@@ -18,11 +18,7 @@
  * every face scores quality 1.000 with ppmTarget 2.2 / focusPxTarget 2.0.
  */
 
-import {
-  defaultCameraRigs,
-  lookAtQuaternion,
-  type StationGeometry,
-} from '../domain/camera';
+import { defaultCameraRigs, lookAtQuaternion, type StationGeometry } from '../domain/camera';
 import { defaultConfig, type SimConfig } from '../domain/config';
 import type { CameraConfig } from '../domain/types';
 
@@ -37,20 +33,12 @@ const SIDE_WORKING_DISTANCE_MM = 929;
 /** Top/bottom working distance (mm, face plane to eye). */
 const TOP_WORKING_DISTANCE_MM = 900;
 
-export function aim(
-  rig: CameraConfig,
-  eye: V3,
-  target: V3,
-): CameraConfig {
+export function aim(rig: CameraConfig, eye: V3, target: V3): CameraConfig {
   const pose = {
     positionMm: eye,
     quaternion: lookAtQuaternion(eye, target),
   };
-  const dist = Math.hypot(
-    eye[0] - target[0],
-    eye[1] - target[1],
-    eye[2] - target[2],
-  );
+  const dist = Math.hypot(eye[0] - target[0], eye[1] - target[1], eye[2] - target[2]);
   return {
     ...rig,
     pose,
@@ -83,36 +71,16 @@ export function recommendedSixViewRigs(config: SimConfig): CameraConfig[] {
   const rearZ = cz - config.parcel.lengthMm / 2;
 
   return [
-    aim(
-      by('FRONT'),
-      [0, midY, frontZ + END_WORKING_DISTANCE_MM],
-      [0, midY, frontZ],
-    ),
-    aim(
-      by('REAR'),
-      [0, midY, rearZ - END_WORKING_DISTANCE_MM],
-      [0, midY, rearZ],
-    ),
-    aim(
-      by('LEFT'),
-      [-(halfW + SIDE_WORKING_DISTANCE_MM), midY, cz],
-      [-halfW, midY, cz],
-    ),
-    aim(
-      by('RIGHT'),
-      [halfW + SIDE_WORKING_DISTANCE_MM, midY, cz],
-      [halfW, midY, cz],
-    ),
+    aim(by('FRONT'), [0, midY, frontZ + END_WORKING_DISTANCE_MM], [0, midY, frontZ]),
+    aim(by('REAR'), [0, midY, rearZ - END_WORKING_DISTANCE_MM], [0, midY, rearZ]),
+    aim(by('LEFT'), [-(halfW + SIDE_WORKING_DISTANCE_MM), midY, cz], [-halfW, midY, cz]),
+    aim(by('RIGHT'), [halfW + SIDE_WORKING_DISTANCE_MM, midY, cz], [halfW, midY, cz]),
     aim(
       by('TOP'),
       [0, config.parcel.heightMm + TOP_WORKING_DISTANCE_MM, cz],
       [0, config.parcel.heightMm, cz],
     ),
-    aim(
-      by('BOTTOM'),
-      [0, -TOP_WORKING_DISTANCE_MM, cz],
-      [0, 0, cz],
-    ),
+    aim(by('BOTTOM'), [0, -TOP_WORKING_DISTANCE_MM, cz], [0, 0, cz]),
   ];
 }
 
@@ -133,5 +101,113 @@ export function recommendedSixViewConfig(): SimConfig {
   // Clean baseline: no glossy tape strips (glare would not gate, but keep
   // the scenario exactly as specified).
   cfg.parcel.tapeChance = 0;
+  return cfg;
+}
+
+/**
+ * Layout described in Report Draft.md: four horizontal side readers spaced
+ * by 90 degrees and aimed obliquely (45 degrees to the parcel faces), plus
+ * dedicated top and bottom readers. The report also specifies a 100 mm gap
+ * between two conveyor sections for the bottom view.
+ */
+export function reportSixViewConfig(): SimConfig {
+  const cfg = defaultConfig();
+  const base = defaultCameraRigs(
+    { lengthMm: cfg.station.lengthMm, beltWidthMm: cfg.belt.widthMm },
+    {
+      sensorWidthPx: cfg.cameras.sensorWidthPx,
+      sensorHeightPx: cfg.cameras.sensorHeightPx,
+      focalLengthMm: cfg.cameras.focalLengthMm,
+      exposureUs: 140,
+      fps: 25,
+      shutter: 'GLOBAL',
+    },
+  );
+  const by = (role: CameraConfig['role']) => base.find((r) => r.role === role)!;
+  const centre: V3 = [0, cfg.parcel.heightMm / 2, cfg.station.lengthMm / 2];
+  const radius = 1250;
+  const diagonal = radius * Math.SQRT1_2;
+
+  const side = (role: 'FRONT' | 'REAR' | 'LEFT' | 'RIGHT', name: string, x: number, z: number) => {
+    const rig = by(role);
+    const aimed = aim(
+      {
+        ...rig,
+        name,
+        sensor: {
+          ...rig.sensor,
+          widthPx: 9000,
+          heightPx: 6000,
+          // ~793 mm horizontal field at the 1.25 m centre distance from
+          // the report's diagonal/FOV calculation.
+          focalLengthMm: 37,
+        },
+      },
+      [x, centre[1], z],
+      centre,
+    );
+    return {
+      ...aimed,
+      // A 9K oblique view turns belt motion into many more pixels than the
+      // report's top-view estimate. Use a short polarized strobe and focus
+      // on the near parcel faces rather than the parcel centre.
+      acquisition: {
+        ...aimed.acquisition,
+        exposureUs: 15,
+        focusDistanceMm: 890,
+        gainDb: 10,
+      },
+      illumination: {
+        ...aimed.illumination,
+        intensity: 2,
+        strobeUs: 15,
+      },
+    };
+  };
+
+  const vertical = (role: 'TOP' | 'BOTTOM', eye: V3, target: V3) => {
+    const rig = by(role);
+    const aimed = aim(
+      {
+        ...rig,
+        sensor: {
+          ...rig.sensor,
+          widthPx: 5400,
+          heightPx: 4000,
+          focalLengthMm: 30,
+        },
+      },
+      eye,
+      target,
+    );
+    return {
+      ...aimed,
+      acquisition: { ...aimed.acquisition, exposureUs: 75 },
+      illumination: { ...aimed.illumination, strobeUs: 75 },
+    };
+  };
+
+  cfg.cameraRigs = [
+    side('FRONT', 'FRONT-RIGHT 45° reader', diagonal, centre[2] + diagonal),
+    side('REAR', 'REAR-LEFT 45° reader', -diagonal, centre[2] - diagonal),
+    side('LEFT', 'FRONT-LEFT 45° reader', -diagonal, centre[2] + diagonal),
+    side('RIGHT', 'REAR-RIGHT 45° reader', diagonal, centre[2] - diagonal),
+    vertical(
+      'TOP',
+      [0, cfg.parcel.heightMm + TOP_WORKING_DISTANCE_MM, centre[2]],
+      [0, cfg.parcel.heightMm, centre[2]],
+    ),
+    vertical('BOTTOM', [0, -TOP_WORKING_DISTANCE_MM, centre[2]], [0, 0, centre[2]]),
+  ];
+  cfg.station.bottomTransfer = 'GAP';
+  cfg.barcode.xDimensionMm = 0.4;
+  cfg.cameras.exposureUs = 140;
+  cfg.cameras.fps = 25;
+  // In this preset 45° is intentional operating geometry, not a degraded
+  // edge case. Keep a hard rejection beyond 65° for genuinely poor views.
+  cfg.quality.incidenceDegTarget = 50;
+  cfg.quality.incidenceDegMax = 65;
+  cfg.quality.focusPxTarget = 2;
+  cfg.quality.focusPxMax = 5;
   return cfg;
 }

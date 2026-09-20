@@ -26,9 +26,7 @@ interface LabTestMocks {
   onExportMetricsCsv: Mock;
 }
 
-function renderControls(
-  overrides: Partial<Parameters<typeof LabControls>[0]> = {},
-): LabTestMocks {
+function renderControls(overrides: Partial<Parameters<typeof LabControls>[0]> = {}): LabTestMocks {
   const mocks: LabTestMocks = {
     onSelectCamera: vi.fn(),
     onSelectParcel: vi.fn(),
@@ -78,9 +76,7 @@ describe('LabControls', () => {
     const next = mutator(cfg);
     const rig = next.cameraRigs[0];
     expect(rig.sensor.focalLengthMm).toBe(18);
-    expect(next.cameraRigs[1].sensor.focalLengthMm).toBe(
-      cfg.cameraRigs[1].sensor.focalLengthMm,
-    );
+    expect(next.cameraRigs[1].sensor.focalLengthMm).toBe(cfg.cameraRigs[1].sensor.focalLengthMm);
     expect(screen.queryByTestId('lab-edit-error')).toBeNull();
   });
 
@@ -119,8 +115,8 @@ describe('LabControls', () => {
     const cfg = recommendedSixViewConfig();
     const props = renderControls({ config: cfg, selectedCameraId: cfg.cameraRigs[0].id });
     const select = screen.getByTestId('lab-preset') as HTMLSelectElement;
-    // 1 placeholder + 8 presets.
-    expect(select.options.length).toBe(9);
+    // 1 placeholder + report layout + 8 comparison presets.
+    expect(select.options.length).toBe(10);
     fireEvent.change(select, { target: { value: 'glare-stress' } });
     expect(props.onApplyPreset).toHaveBeenCalledWith('glare-stress');
   });
@@ -170,8 +166,6 @@ describe('LabControls', () => {
     const err = await screen.findByTestId('lab-edit-error');
     expect(err.textContent).toContain('configVersion 99');
     fireEvent.change(file, { target: { files: [makeFile('good')] } });
-    await waitFor(() =>
-      expect(screen.queryByTestId('lab-edit-error')).toBeNull(),
-    );
+    await waitFor(() => expect(screen.queryByTestId('lab-edit-error')).toBeNull());
   });
 });

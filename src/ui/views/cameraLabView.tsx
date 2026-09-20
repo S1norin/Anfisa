@@ -8,7 +8,7 @@
  * feed and pipeline reflect them immediately.
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { simStore, useSim } from '../../store/simStore';
 import { importConfigIntoStore } from '../../store/import';
 import { downloadTextFile } from '../../export/download';
@@ -34,42 +34,29 @@ export function CameraLabView() {
   const [selectedParcelId, setSelectedParcelId] = useState<string | null>(null);
   const frozen = state.status !== 'RUNNING';
 
-  // The parcels Map is mutated in place (spawn/despawn), so its identity is
-  // stable — re-spread on the tick instead of depending on the Map ref.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- Map identity is stable; see note
-  const parcels = useMemo(() => [...state.parcels.values()], [
-    state.simTimeMs,
-    state.config,
-    state.cameraStates,
-  ]);
+  // The store mutates this Map in place, so spread it on every store-driven
+  // render rather than memoizing by its stable identity.
+  const parcels = [...state.parcels.values()];
 
   /** Default: the newest parcel (highest frontZMm); stale selections fall back. */
-  const parcel =
-    parcels.find((p) => p.parcelId === selectedParcelId) ??
-    parcels[0] ??
-    null;
+  const parcel = parcels.find((p) => p.parcelId === selectedParcelId) ?? parcels[0] ?? null;
   const rig =
     state.config.cameraRigs.find((r) => r.id === selectedCameraId) ??
     state.config.cameraRigs[0] ??
     null;
 
-  const report = useMemo(
-    () =>
-      rig && parcel
-        ? computeLabReport(
-            rig,
-            state.cameraStates[rig.id] ?? 'OFFLINE',
-            parcel,
-            parcels,
-            state.simTimeMs,
-            state.speedMmPerSec,
-            state.config,
-          )
-        : null,
-    // simTimeMs + rigs are the deterministic inputs while frozen; the sim
-    // version bump (useSim re-render) re-evaluates on resume/step/commit.
-    [rig, parcel, state.simTimeMs, state.speedMmPerSec, state.config, state.cameraStates, parcels],
-  );
+  const report =
+    rig && parcel
+      ? computeLabReport(
+          rig,
+          state.cameraStates[rig.id] ?? 'OFFLINE',
+          parcel,
+          parcels,
+          state.simTimeMs,
+          state.speedMmPerSec,
+          state.config,
+        )
+      : null;
 
   return (
     <div className="view view-camera-lab" data-testid="camera-lab-view">
@@ -85,7 +72,18 @@ export function CameraLabView() {
               parcels={parcels}
               selectedParcelId={parcel?.parcelId ?? null}
               onSelectParcel={setSelectedParcelId}
+              cameraView
             />
+            {rig && (
+              <div className="camera-view-hud" aria-label="Active camera view">
+                <span className="camera-view-live">CAMERA VIEW</span>
+                <strong>{rig.name}</strong>
+                <span>
+                  {rig.sensor.widthPx} × {rig.sensor.heightPx} · {rig.sensor.focalLengthMm} mm
+                </span>
+              </div>
+            )}
+            <div className="camera-view-reticle" aria-hidden="true" />
           </div>
           <div className="view-panel">
             <LabReportView report={report} hasParcel={parcel !== null} />

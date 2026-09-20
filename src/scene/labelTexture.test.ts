@@ -32,6 +32,10 @@ function barSegments(svg: string): { center: number; width: number }[] {
 }
 
 describe('Code 128 label texture options (PAR-006)', () => {
+  it('uses opaque white label stock behind the black bars', () => {
+    expect(code128Options(PAYLOAD).backgroundcolor).toBe('ffffff');
+  });
+
   it('produces bars for the payload', () => {
     const svg = bwipjs.toSVG(code128Options(PAYLOAD, { scale: SCALE, quietZoneModules: QUIET }));
     const bars = barSegments(svg);
@@ -62,7 +66,9 @@ describe('Code 128 label texture options (PAR-006)', () => {
 
   it('renders the human-readable line only when requested', () => {
     // Fresh objects: bwip-js mutates the options it renders (see above).
-    const withText = bwipjs.toSVG(code128Options(PAYLOAD, { scale: SCALE, quietZoneModules: QUIET }));
+    const withText = bwipjs.toSVG(
+      code128Options(PAYLOAD, { scale: SCALE, quietZoneModules: QUIET }),
+    );
     const noText = bwipjs.toSVG({
       ...code128Options(PAYLOAD, { scale: SCALE, quietZoneModules: QUIET }),
       includetext: false,

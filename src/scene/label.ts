@@ -95,7 +95,8 @@ export function buildLabelMesh(
     new THREE.BoxGeometry(geo.widthM, geo.heightM, 0.002),
     new THREE.MeshStandardMaterial({
       map: texture,
-      roughness: 0.4,
+      color: 0xffffff,
+      roughness: 0.65,
       metalness: 0.0,
     }),
   );

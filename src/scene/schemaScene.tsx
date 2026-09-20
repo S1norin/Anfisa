@@ -11,12 +11,7 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import {
-  Line,
-  OrbitControls,
-  OrthographicCamera,
-  PerspectiveCamera,
-} from '@react-three/drei';
+import { Line, OrbitControls, OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { mmToM } from '../domain/units';
 import type { CameraState, ParcelState } from '../domain/types';
@@ -52,13 +47,13 @@ export interface SchemaToggles {
 
 export const DEFAULT_SCHEMA_TOGGLES: SchemaToggles = {
   dimensions: true,
-  frusta: true,
-  scanZones: true,
+  frusta: false,
+  scanZones: false,
   focusPlanes: false,
   axes: false,
   roi: false,
-  arcs: true,
-  labels: true,
+  arcs: false,
+  labels: false,
 };
 
 export interface SchemaSceneApi {
@@ -69,11 +64,7 @@ export interface SchemaSceneApi {
   fit: () => void;
 }
 
-const toM = (p: V3): [number, number, number] => [
-  mmToM(p[0]),
-  mmToM(p[1]),
-  mmToM(p[2]),
-];
+const toM = (p: V3): [number, number, number] => [mmToM(p[0]), mmToM(p[1]), mmToM(p[2])];
 const toMpts = (pts: V3[]): [number, number, number][] => pts.map(toM);
 
 /**
@@ -172,11 +163,7 @@ interface DimLineProps {
 function DimensionLine({ from, to, label }: DimLineProps) {
   const f = toM(from);
   const t = toM(to);
-  const mid: [number, number, number] = [
-    (f[0] + t[0]) / 2,
-    (f[1] + t[1]) / 2,
-    (f[2] + t[2]) / 2,
-  ];
+  const mid: [number, number, number] = [(f[0] + t[0]) / 2, (f[1] + t[1]) / 2, (f[2] + t[2]) / 2];
   const ticks = useMemo(() => [endpointTick(f, t), endpointTick(t, f)], [f, t]);
   return (
     <group>
@@ -258,13 +245,7 @@ function FocusPlaneRect({ corners, color = '#35d07f' }: FocusPlaneProps) {
           depthWrite={false}
         />
       </mesh>
-      <Line
-        points={[...pts, pts[0]]}
-        color={color}
-        lineWidth={1.2}
-        transparent
-        opacity={0.65}
-      />
+      <Line points={[...pts, pts[0]]} color={color} lineWidth={1.2} transparent opacity={0.65} />
     </group>
   );
 }
@@ -367,9 +348,14 @@ function FitController({
         new THREE.Vector3(1.1, 2.3, L + 1.1),
       );
       camera.position.set(...preset.position);
+      // Aim explicitly instead of relying on OrbitControls having registered
+      // before this effect. TOP also needs a non-parallel up vector.
+      camera.up.set(0, 1, 0);
+      if (preset.name === 'TOP') camera.up.set(0, 0, -1);
+      camera.lookAt(new THREE.Vector3(...preset.target));
+      camera.updateMatrixWorld(true);
       if ('zoom' in camera) {
         const ortho = camera as THREE.OrthographicCamera;
-        camera.updateMatrixWorld();
         const inv = camera.matrixWorldInverse.clone();
         const xs: number[] = [];
         const ys: number[] = [];
@@ -389,9 +375,11 @@ function FitController({
         ortho.right = aspect;
         ortho.top = 1;
         ortho.bottom = -1;
-        ortho.zoom =
-          Math.min(size.width / Math.max(extW, 1e-6), size.height / Math.max(extH, 1e-6)) *
-          0.92;
+        // Orthographic bounds are expressed in world units (top/bottom =
+        // +/-1), not CSS pixels. Fit the projected world extent into those
+        // bounds; the previous pixel/world ratio over-zoomed by hundreds of
+        // times and turned annotations into unreadable fragments.
+        ortho.zoom = Math.min((2 * aspect) / Math.max(extW, 1e-6), 2 / Math.max(extH, 1e-6)) * 0.9;
         ortho.updateProjectionMatrix();
       }
       if (controls?.target && controls.update) {
@@ -455,14 +443,26 @@ export function SchemaScene({
   cameraStates,
   onApi,
 }: SchemaSceneProps) {
-  const presets = useMemo(
-    () => schemaPresets(config.station.lengthMm),
-    [config.station.lengthMm],
-  );
+  const presets = useMemo(() => schemaPresets(config.station.lengthMm), [config.station.lengthMm]);
   const preset = presets[presetName];
   const fitFnRef = useRef<FitFn | null>(null);
 
   const dims = useMemo(() => dimensionLines(config, parcel), [config, parcel]);
+  const visibleDims = useMemo(() => {
+    const byPreset: Record<SchemaPreset['name'], Set<string>> = {
+      TOP: new Set([
+        'belt-width',
+        'station-length',
+        'bottom-opening',
+        'sorter-distance',
+        'parcel-size',
+      ]),
+      SIDE: new Set(['station-length', 'working-distance', 'sorter-distance']),
+      FRONT: new Set(['belt-width', 'working-distance', 'bottom-opening', 'parcel-size']),
+      ISO: new Set(dims.map((d) => d.id)),
+    };
+    return dims.filter((d) => byPreset[presetName].has(d.id));
+  }, [dims, presetName]);
   const zones = useMemo(() => scanZones(config.cameraRigs), [config.cameraRigs]);
   const axes = useMemo(() => opticalAxes(config.cameraRigs), [config.cameraRigs]);
   const labelGroups = useMemo(
@@ -515,7 +515,7 @@ export function SchemaScene({
         {parcel && <ParcelScene state={parcel} schematic />}
 
         {toggles.dimensions &&
-          dims.map((d) => (
+          visibleDims.map((d) => (
             <DimensionLine key={d.id} from={d.from} to={d.to} label={d.label} />
           ))}
 
@@ -589,12 +589,7 @@ export function SchemaScene({
             .flatMap((r) => {
               const hasTopLabel = parcel.spec.labels.some((l) => l.face === 'TOP');
               if (!hasTopLabel) return [];
-              const arc = incidenceArc(
-                parcelTopCentre,
-                [0, 1, 0],
-                r.pose.positionMm,
-                140,
-              );
+              const arc = incidenceArc(parcelTopCentre, [0, 1, 0], r.pose.positionMm, 140);
               return [
                 <AngleArcLine
                   key={`${r.id}-inc`}

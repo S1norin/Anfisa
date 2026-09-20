@@ -46,6 +46,9 @@ export function code128Options(
     text: payload,
     includetext: true, // human-readable line, centred below the bars
     textxalign: 'center',
+    // Canvas defaults to transparent black. The label material is opaque,
+    // so an unset background made the whole sticker render as a black card.
+    backgroundcolor: 'ffffff',
     scale: opts.scale ?? 4,
     padding: opts.quietZoneModules ?? 10,
   };

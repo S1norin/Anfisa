@@ -21,6 +21,7 @@ import {
 } from './presets';
 
 const IDS = [
+  'report-6view',
   'recommended-6view',
   'draft-4-oblique',
   'bottom-gap',
@@ -32,7 +33,7 @@ const IDS = [
 ];
 
 describe('named presets (CFG-002)', () => {
-  it('exposes exactly the eight required presets', () => {
+  it('exposes the report layout plus the eight comparison presets', () => {
     expect(PRESETS.map((p) => p.id)).toEqual(IDS);
     for (const id of IDS) expect(getPreset(id)).toBeDefined();
   });
@@ -73,6 +74,14 @@ describe('named presets (CFG-002)', () => {
   });
 
   // Each preset mutates the real config field its name promises.
+  it('report layout → four oblique side readers, top/bottom, and a 100 mm gap', () => {
+    const cfg = getPreset('report-6view')!.build();
+    expect(cfg.cameraRigs).toHaveLength(6);
+    expect(cfg.station.bottomTransfer).toBe('GAP');
+    expect(cfg.cameraRigs.filter((r) => r.role === 'TOP' || r.role === 'BOTTOM')).toHaveLength(2);
+    expect(cfg.cameraRigs.filter((r) => r.name.includes('45°'))).toHaveLength(4);
+  });
+
   it('draft-4-oblique → exactly four enabled side readers, no top/bottom', () => {
     const cfg = getPreset('draft-4-oblique')!.build();
     expect(cfg.cameraRigs).toHaveLength(4);
@@ -131,6 +140,13 @@ describe('preset run reproducibility (CFG-004)', () => {
       })),
     );
   }
+
+  it('report layout produces usable barcode observations', () => {
+    const run = new ProcessRun(applyPresetConfig('report-6view', DEFAULT_PRESET_SEED), 6);
+    run.runToCompletion();
+    expect(run.totalDecodedObservations).toBeGreaterThan(0);
+    expect(run.pipeline.results.some((result) => result.decodedLabels > 0)).toBe(true);
+  });
 
   it('recommended-6view reproduces identical parcel results (same seed)', () => {
     const a = new ProcessRun(applyPresetConfig('recommended-6view', DEFAULT_PRESET_SEED), 4);

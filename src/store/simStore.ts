@@ -2,12 +2,8 @@ import { useSyncExternalStore } from 'react';
 import { nextCameraState, syncCameraStates } from '../domain/camera';
 import type { SimConfig } from '../domain/config';
 import { defaultConfig } from '../domain/config';
-import type {
-  Face,
-  ParcelResult,
-  SimEvent,
-} from '../domain/types';
-import { recommendedSixViewConfig } from '../capture/presets';
+import type { Face, ParcelResult, SimEvent } from '../domain/types';
+import { reportSixViewConfig } from '../capture/presets';
 import type { RunObservationMeta } from '../metrics/runRecord';
 import { computeRunMetrics, type RunMetrics } from '../metrics/metrics';
 import { feedCaptureEvent } from '../pipeline/feedCapture';
@@ -120,9 +116,7 @@ export class SimStore {
         reasons: o.reasons,
       })),
       // Capture and decode share the same domain step → 0 by construction.
-      captureToDecodeSamplesMs: this.observations
-        .filter((o) => o.decoded)
-        .map(() => 0),
+      captureToDecodeSamplesMs: this.observations.filter((o) => o.decoded).map(() => 0),
     });
   }
 
@@ -195,8 +189,7 @@ export class SimStore {
           this.pipelineInstance,
         );
         this.observations.push(...out.observations);
-        this.decodedObservations +=
-          out.observations.filter((o) => o.decoded).length;
+        this.decodedObservations += out.observations.filter((o) => o.decoded).length;
         this.misassociations += out.stats.mismatches;
       }
     }
@@ -256,10 +249,7 @@ export class SimStore {
   updateConfig(mutator: (cfg: SimConfig) => SimConfig): void {
     const next = mutator(this.sim.state.config);
     this.sim.state.config = next;
-    this.sim.state.cameraStates = syncCameraStates(
-      next.cameraRigs,
-      this.sim.state.cameraStates,
-    );
+    this.sim.state.cameraStates = syncCameraStates(next.cameraRigs, this.sim.state.cameraStates);
     // Keep the fps-scheduling history aligned with the rig list.
     const kept: Record<string, number> = {};
     for (const rig of next.cameraRigs) {
@@ -288,7 +278,7 @@ export class SimStore {
 /** The live app defaults to the recommended 6-view preset — the layout
  *  that actually reads (bare defaultConfig geometry is a stress case,
  *  see the baseline in capture/presets.ts). */
-export const simStore = new SimStore(recommendedSixViewConfig());
+export const simStore = new SimStore(reportSixViewConfig());
 
 /** Subscribe a component to simulation version ticks. */
 export function useSim(): Simulation {

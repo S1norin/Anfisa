@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -6,7 +6,7 @@ import { degToRad, mmToM } from '../domain/units';
 import type { CameraState, ParcelState } from '../domain/types';
 import type { SimConfig } from '../domain/config';
 import { defaultConfig } from '../domain/config';
-import { CameraRigScene } from './cameraRig';
+import { CameraRigScene, cameraRigToPerspective } from './cameraRig';
 import { ParcelScene } from './parcel';
 import { StationScene } from './stationScene';
 import { CaptureRenderer } from '../capture/captureRenderer';
@@ -34,8 +34,7 @@ function hasWebGL(): boolean {
   try {
     const canvas = document.createElement('canvas');
     return Boolean(
-      window.WebGLRenderingContext &&
-        (canvas.getContext('webgl2') || canvas.getContext('webgl')),
+      window.WebGLRenderingContext && (canvas.getContext('webgl2') || canvas.getContext('webgl')),
     );
   } catch {
     return false;
@@ -57,6 +56,29 @@ export interface SceneCanvasProps {
   parcels?: ParcelState[];
   selectedParcelId?: string | null;
   onSelectParcel?: (id: string | null) => void;
+  /** Render through the selected physical rig instead of the orbit camera. */
+  cameraView?: boolean;
+}
+
+function RigViewCamera({ rig }: { rig: SimConfig['cameraRigs'][number] }) {
+  const set = useThree((state) => state.set);
+  const size = useThree((state) => state.size);
+
+  const camera = useMemo(() => {
+    const next = cameraRigToPerspective(rig);
+    // The lab viewport follows its available size. In the normal desktop
+    // layout this matches the configured 16:9 preview, while remaining
+    // usable on narrower screens.
+    next.aspect = size.width / Math.max(1, size.height);
+    next.updateProjectionMatrix();
+    return next;
+  }, [rig, size.width, size.height]);
+
+  useLayoutEffect(() => {
+    set({ camera });
+  }, [camera, set]);
+
+  return null;
 }
 
 /**
@@ -87,8 +109,11 @@ export function SceneCanvas({
   parcels = [],
   selectedParcelId = null,
   onSelectParcel,
+  cameraView = false,
 }: SceneCanvasProps) {
   const selectedParcel = parcels.find((p) => p.parcelId === selectedParcelId) ?? null;
+  const selectedCamera =
+    config.cameraRigs.find((rig) => rig.id === selectedCameraId) ?? config.cameraRigs[0] ?? null;
   if (!hasWebGL()) {
     return (
       <div className="scene-canvas-fallback" data-testid="scene-canvas-fallback">
@@ -106,21 +131,22 @@ export function SceneCanvas({
     >
       <color attach="background" args={['#161a20']} />
       <RendererProbe />
+      {cameraView && selectedCamera && <RigViewCamera rig={selectedCamera} />}
       <CaptureRenderer />
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[4, 6, 3]} intensity={1.1} />
+      <ambientLight intensity={0.22} />
+      <directionalLight position={[4, 6, 3]} intensity={0.32} />
       <StationScene config={config} />
-      <CameraRigScene
-        rigs={config.cameraRigs}
-        states={
-          cameraStates ??
-          Object.fromEntries(
-            config.cameraRigs.map((r) => [r.id, r.enabled ? 'IDLE' : 'OFFLINE']),
-          )
-        }
-        selectedId={selectedCameraId}
-        onSelect={onSelectCamera ?? (() => undefined)}
-      />
+      {!cameraView && (
+        <CameraRigScene
+          rigs={config.cameraRigs}
+          states={
+            cameraStates ??
+            Object.fromEntries(config.cameraRigs.map((r) => [r.id, r.enabled ? 'IDLE' : 'OFFLINE']))
+          }
+          selectedId={selectedCameraId}
+          onSelect={onSelectCamera ?? (() => undefined)}
+        />
+      )}
       {parcels.map((p) => (
         <group
           key={p.parcelId}
@@ -142,13 +168,17 @@ export function SceneCanvas({
         </group>
       ))}
       {selectedParcel && <ParcelSelectionBox parcel={selectedParcel} />}
-      <gridHelper args={[8, 40, '#2f3740', '#222831']} position={[0, -0.8, 1.1]} />
-      <OrbitControls
-        target={[0, 0.3, 1.1]}
-        maxPolarAngle={Math.PI / 2 - 0.02}
-        minDistance={0.4}
-        maxDistance={12}
-      />
+      {!cameraView && (
+        <>
+          <gridHelper args={[8, 40, '#2f3740', '#222831']} position={[0, -0.8, 1.1]} />
+          <OrbitControls
+            target={[0, 0.3, 1.1]}
+            maxPolarAngle={Math.PI / 2 - 0.02}
+            minDistance={0.4}
+            maxDistance={12}
+          />
+        </>
+      )}
     </Canvas>
   );
 }

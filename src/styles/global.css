@@ -1,6 +1,10 @@
 :root {
   color-scheme: dark;
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
   --bg: #101418;
   --panel: #171d23;
   --panel-border: #263039;
@@ -604,8 +608,12 @@ body {
 }
 
 .view-camera-lab {
-  grid-template-columns: minmax(0, 1fr) 340px;
+  display: block;
   min-height: calc(100vh - 50px);
+}
+
+.view-camera-lab > h2 {
+  margin-bottom: 14px;
 }
 
 .lab-layout {
@@ -613,6 +621,68 @@ body {
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 12px;
   align-items: start;
+}
+
+.camera-view-hud {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  left: 12px;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(143, 161, 175, 0.38);
+  border-radius: 6px;
+  background: rgba(8, 12, 16, 0.76);
+  backdrop-filter: blur(5px);
+  pointer-events: none;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.camera-view-hud strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.camera-view-live {
+  color: var(--ok);
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+}
+
+.camera-view-reticle {
+  position: absolute;
+  z-index: 2;
+  inset: 50% auto auto 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(220, 229, 236, 0.45);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.camera-view-reticle::before,
+.camera-view-reticle::after {
+  content: '';
+  position: absolute;
+  background: rgba(220, 229, 236, 0.55);
+}
+
+.camera-view-reticle::before {
+  width: 34px;
+  height: 1px;
+  top: 11px;
+  left: -6px;
+}
+
+.camera-view-reticle::after {
+  width: 1px;
+  height: 34px;
+  top: -6px;
+  left: 11px;
 }
 
 .lab-controls .lab-row {
@@ -815,6 +885,39 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px 10px;
+}
+
+.schema-display-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.schema-display-presets button {
+  padding: 6px 4px;
+  font-size: 0.78em;
+}
+
+.schema-display-presets button.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(77, 163, 255, 0.16);
+}
+
+.schema-layers {
+  border-top: 1px solid var(--panel-border);
+  padding-top: 8px;
+}
+
+.schema-layers summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 0.82em;
+}
+
+.schema-layers[open] summary {
+  margin-bottom: 9px;
 }
 
 .schema-toggle {

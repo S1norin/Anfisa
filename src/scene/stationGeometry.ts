@@ -34,12 +34,8 @@ export interface StationDimensions {
 }
 
 export function getStationDimensions(cfg: SimConfig): StationDimensions {
-  const railInnerMm =
-    cfg.belt.widthMm / 2 + RAIL_OFFSET_MM - RAIL_WIDTH_MM / 2;
-  const bottomOpeningMm =
-    cfg.station.bottomTransfer === 'GAP'
-      ? GAP_OPENING_MM
-      : 2 * railInnerMm;
+  const railInnerMm = cfg.belt.widthMm / 2 + RAIL_OFFSET_MM - RAIL_WIDTH_MM / 2;
+  const bottomOpeningMm = cfg.station.bottomTransfer === 'GAP' ? GAP_OPENING_MM : 2 * railInnerMm;
   return {
     beltWidthMm: cfg.belt.widthMm,
     stationLengthMm: cfg.station.lengthMm,
@@ -55,11 +51,14 @@ export function getStationDimensions(cfg: SimConfig): StationDimensions {
 
 type Part =
   | 'belt-deck'
+  | 'belt-edge'
   | 'side-rail'
   | 'leg'
   | 'photoeye'
   | 'sort-point'
-  | 'enclosure';
+  | 'enclosure'
+  | 'enclosure-panel'
+  | 'station-light';
 
 interface DeckSpec {
   part: Part;
@@ -86,6 +85,31 @@ function makeBox(
   mesh.position.set(x, y, z);
   mesh.name = name;
   mesh.userData.part = part;
+  return mesh;
+}
+
+function makeEnclosurePanel(
+  w: number,
+  h: number,
+  d: number,
+  x: number,
+  y: number,
+  z: number,
+  name: string,
+): THREE.Mesh {
+  const material = new THREE.MeshPhysicalMaterial({
+    color: 0x18222d,
+    roughness: 0.45,
+    metalness: 0.15,
+    transparent: true,
+    opacity: 0.16,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  mesh.position.set(x, y, z);
+  mesh.name = name;
+  mesh.userData.part = 'enclosure-panel';
   return mesh;
 }
 
@@ -129,10 +153,27 @@ export function buildStationGroup(cfg: SimConfig): THREE.Group {
         0,
         -deckThick / 2,
         (seg.z0 + seg.z1) / 2,
-        0x2b3138,
+        0x34434f,
         'belt-deck',
       ),
     );
+    // Pale edge stripes make the two conveyor sections and their optical
+    // gap legible against the dark light-control enclosure.
+    for (const side of [-1, 1] as const) {
+      group.add(
+        makeBox(
+          'belt-edge',
+          0.025,
+          0.006,
+          len,
+          side * (W / 2 - 0.025),
+          0.003,
+          (seg.z0 + seg.z1) / 2,
+          0x91a4b5,
+          `belt-edge-${side < 0 ? 'L' : 'R'}`,
+        ),
+      );
+    }
   }
 
   // Side-grip rails (SIDE_GRIP only) carry the parcel's sides through [0, L].
@@ -160,9 +201,7 @@ export function buildStationGroup(cfg: SimConfig): THREE.Group {
   const legZs = [-0.3, L * 0.25, L * 0.5, L * 0.75, L + 0.3];
   for (const z of legZs) {
     for (const side of [-1, 1] as const) {
-      group.add(
-        makeBox('leg', 0.05, 0.8, 0.05, side * (W / 2 - 0.02), -0.4, z, 0x23282e, `leg`),
-      );
+      group.add(makeBox('leg', 0.05, 0.8, 0.05, side * (W / 2 - 0.02), -0.4, z, 0x23282e, `leg`));
     }
   }
 
@@ -186,7 +225,17 @@ export function buildStationGroup(cfg: SimConfig): THREE.Group {
         ),
       );
     }
-    const beam = makeBox('photoeye', W + 0.08, 0.004, 0.004, 0, 0.2, z, 0xf85149, `photoeye-${label}-beam`);
+    const beam = makeBox(
+      'photoeye',
+      W + 0.08,
+      0.004,
+      0.004,
+      0,
+      0.2,
+      z,
+      0xf85149,
+      `photoeye-${label}-beam`,
+    );
     (beam.material as THREE.MeshStandardMaterial).transparent = true;
     (beam.material as THREE.MeshStandardMaterial).opacity = 0.6;
     group.add(beam);
@@ -204,16 +253,87 @@ export function buildStationGroup(cfg: SimConfig): THREE.Group {
   const encH = 1.2;
   for (const side of [-1, 1] as const) {
     group.add(
-      makeBox('enclosure', 0.04, encH, 0.04, side * (W / 2 + 0.12), encH / 2, 0, 0x2f3740, 'enc-post'),
+      makeBox(
+        'enclosure',
+        0.04,
+        encH,
+        0.04,
+        side * (W / 2 + 0.12),
+        encH / 2,
+        0,
+        0x2f3740,
+        'enc-post',
+      ),
     );
     group.add(
-      makeBox('enclosure', 0.04, encH, 0.04, side * (W / 2 + 0.12), encH / 2, L, 0x2f3740, 'enc-post'),
+      makeBox(
+        'enclosure',
+        0.04,
+        encH,
+        0.04,
+        side * (W / 2 + 0.12),
+        encH / 2,
+        L,
+        0x2f3740,
+        'enc-post',
+      ),
     );
   }
   for (const side of [-1, 1] as const) {
     group.add(
       makeBox('enclosure', 0.04, 0.04, L, side * (W / 2 + 0.12), encH, L / 2, 0x2f3740, 'enc-rail'),
     );
+  }
+
+  // Light-control enclosure from the report: translucent in the explainer
+  // so the machinery remains inspectable, but visibly bounds the scan cell.
+  const enclosureX = W / 2 + 0.12;
+  group.add(
+    makeEnclosurePanel(0.012, encH, L, -enclosureX, encH / 2, L / 2, 'enclosure-left-panel'),
+    makeEnclosurePanel(0.012, encH, L, enclosureX, encH / 2, L / 2, 'enclosure-right-panel'),
+    makeEnclosurePanel(W + 0.28, 0.012, L, 0, encH, L / 2, 'enclosure-roof-panel'),
+  );
+
+  // Visible LED/strobe bars. Actual light sources are colocated by
+  // StationScene; emissive geometry makes the fixtures readable on camera.
+  for (const [i, z] of [L * 0.22, L * 0.5, L * 0.78].entries()) {
+    const fixture = makeBox(
+      'station-light',
+      Math.min(W * 0.72, 0.48),
+      0.018,
+      0.07,
+      0,
+      encH - 0.025,
+      z,
+      0xfff2c2,
+      `station-light-${i + 1}`,
+    );
+    const material = fixture.material as THREE.MeshStandardMaterial;
+    material.emissive.setHex(0xffe6a0);
+    material.emissiveIntensity = 3.5;
+    group.add(fixture);
+  }
+
+  // Vertical polarized panels light the four vertical parcel faces for the
+  // oblique side readers. Two stations per wall reduce hard self-shadowing.
+  for (const side of [-1, 1] as const) {
+    for (const [i, z] of [L * 0.34, L * 0.66].entries()) {
+      const fixture = makeBox(
+        'station-light',
+        0.018,
+        0.48,
+        0.09,
+        side * (enclosureX - 0.018),
+        0.56,
+        z,
+        0xffe7ad,
+        `station-side-light-${side < 0 ? 'L' : 'R'}-${i + 1}`,
+      );
+      const material = fixture.material as THREE.MeshStandardMaterial;
+      material.emissive.setHex(0xffd982);
+      material.emissiveIntensity = 4;
+      group.add(fixture);
+    }
   }
 
   group.updateMatrixWorld(true);
@@ -230,11 +350,7 @@ export function isBottomPointVisible(
   cameraMm: { x: number; y: number; z: number },
 ): { visible: boolean; hitPart?: string; hitName?: string } {
   const group = buildStationGroup(cfg);
-  const from = new THREE.Vector3(
-    mmToM(cameraMm.x),
-    mmToM(cameraMm.y),
-    mmToM(cameraMm.z),
-  );
+  const from = new THREE.Vector3(mmToM(cameraMm.x), mmToM(cameraMm.y), mmToM(cameraMm.z));
   const to = new THREE.Vector3(mmToM(pointMm.x), mmToM(pointMm.y), mmToM(pointMm.z));
   const dir = to.clone().sub(from);
   const ray = new THREE.Raycaster(from, dir.normalize(), 0, dir.length());

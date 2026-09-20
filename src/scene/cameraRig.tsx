@@ -26,8 +26,14 @@ export function cameraRigToPerspective(cfg: CameraConfig): THREE.PerspectiveCame
   const p = cfg.pose.positionMm;
   const q = cfg.pose.quaternion;
   cam.position.set(p[0] * MM, p[1] * MM, p[2] * MM);
-  cam.quaternion.set(q[0], q[1], q[2], q[3]);
+  // Domain cameras use an OpenCV-style +Z optical axis, while THREE.Camera
+  // looks down local -Z. Rotate the camera half a turn in its local Y axis
+  // so the rendered view follows the same optical axis as projection.ts.
+  cam.quaternion
+    .set(q[0], q[1], q[2], q[3])
+    .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
   cam.updateProjectionMatrix();
+  cam.updateMatrixWorld();
   return cam;
 }
 
@@ -49,10 +55,7 @@ interface RigMeshProps {
 
 function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
   const body = useMemo(() => new THREE.BoxGeometry(0.09, 0.11, 0.06), []);
-  const lens = useMemo(
-    () => new THREE.CylinderGeometry(0.02, 0.025, 0.02, 24),
-    [],
-  );
+  const lens = useMemo(() => new THREE.CylinderGeometry(0.02, 0.025, 0.02, 24), []);
   useEffect(
     () => () => {
       body.dispose();
@@ -67,11 +70,9 @@ function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
 
   const cornersM = useMemo(
     () =>
-      frustumCornersMm(rig).map((c) => [c[0] * MM, c[1] * MM, c[2] * MM] as [
-        number,
-        number,
-        number,
-      ]),
+      frustumCornersMm(rig).map(
+        (c) => [c[0] * MM, c[1] * MM, c[2] * MM] as [number, number, number],
+      ),
     [rig],
   );
 
@@ -103,11 +104,7 @@ function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
       <mesh geometry={lens} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.038]}>
         <meshStandardMaterial color="#111827" metalness={0.3} roughness={0.2} />
       </mesh>
-      <FrustumLines
-        cornersM={cornersM}
-        color={color}
-        opacity={rig.enabled ? 0.6 : 0.2}
-      />
+      <FrustumLines cornersM={cornersM} color={color} opacity={rig.enabled ? 0.6 : 0.2} />
     </group>
   );
 }
@@ -119,12 +116,7 @@ export interface CameraRigSceneProps {
   onSelect: (id: string) => void;
 }
 
-export function CameraRigScene({
-  rigs,
-  states,
-  selectedId,
-  onSelect,
-}: CameraRigSceneProps) {
+export function CameraRigScene({ rigs, states, selectedId, onSelect }: CameraRigSceneProps) {
   return (
     <>
       {rigs.map((r) => (
