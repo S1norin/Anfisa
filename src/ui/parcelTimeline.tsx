@@ -59,6 +59,7 @@ export function ParcelTimeline({ parcelId, stages }: Props) {
               ]
                 .filter(Boolean)
                 .join(' ')}
+              aria-current={isCurrent ? 'step' : undefined}
               data-testid={`timeline-stage-${stage.id}`}
             >
               <span className="timeline-dot" aria-hidden="true" />

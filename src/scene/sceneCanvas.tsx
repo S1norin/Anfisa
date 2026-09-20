@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { useEffect, useMemo } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { degToRad, mmToM } from '../domain/units';
@@ -10,6 +10,25 @@ import { CameraRigScene } from './cameraRig';
 import { ParcelScene } from './parcel';
 import { StationScene } from './stationScene';
 import { CaptureRenderer } from '../capture/captureRenderer';
+
+/**
+ * Diagnostics probe: expose the WebGLRenderer on `window.__anfisa` so
+ * perf/leak checks (NFR-003/004/005) can read renderer.info (memory,
+ * draw calls) from outside React. Harmless in production; overwritten on
+ * re-mount.
+ */
+function RendererProbe() {
+  const state = useThree();
+  useEffect(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__anfisa = { gl: state.gl, scene: state.scene, camera: state.camera };
+    return () => {
+      const cur = w.__anfisa as { gl?: unknown } | undefined;
+      if (cur && cur.gl === state.gl) delete w.__anfisa;
+    };
+  });
+  return null;
+}
 
 function hasWebGL(): boolean {
   try {
@@ -86,6 +105,7 @@ export function SceneCanvas({
       onPointerMissed={() => onSelectParcel?.(null)}
     >
       <color attach="background" args={['#161a20']} />
+      <RendererProbe />
       <CaptureRenderer />
       <ambientLight intensity={0.7} />
       <directionalLight position={[4, 6, 3]} intensity={1.1} />

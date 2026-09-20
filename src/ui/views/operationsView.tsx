@@ -18,6 +18,7 @@ import { CameraWall } from '../cameraWall';
 import { ParcelTimeline } from '../parcelTimeline';
 import { ParcelResultCard } from '../parcelResult';
 import { LiveMetrics } from '../liveMetrics';
+import { LimitsPanel } from '../limitsPanel';
 import { parcelTimelineStages } from '../operations/timeline';
 
 /** Metrics recompute at most every 250 ms of sim time (the panel is a
@@ -96,6 +97,11 @@ export function OperationsView() {
   }
   const snap = snapRef.current;
 
+  // Keyboard-accessible selection mirrors (NFR-008): the same state the 3D
+  // click handlers drive, exposed as native form controls. The parcel list
+  // is capped so a long run does not grow the dropdown unboundedly.
+  const retiredOptions = finalized.slice(-10);
+
   return (
     <section className="view view-operations" data-testid="operations-view">
       <div className="view-canvas-col">
@@ -114,6 +120,41 @@ export function OperationsView() {
       </div>
       <div className="view-panel">
         <h2>Operations</h2>
+        <div className="op-select-row">
+          <select
+            className="op-select"
+            data-testid="parcel-select"
+            aria-label="Select parcel (keyboard)"
+            value={selectedParcelId ?? 'auto'}
+            onChange={(e) =>
+              setSelectedParcelId(e.target.value === 'auto' ? null : e.target.value)
+            }>
+            <option value="auto">Auto-follow (newest)</option>
+            {liveParcels.map((p) => (
+              <option key={p.parcelId} value={p.parcelId}>
+                {p.parcelId}
+              </option>
+            ))}
+            {retiredOptions.map((f) => (
+              <option key={f.parcelId} value={f.parcelId}>
+                {f.parcelId} (done)
+              </option>
+            ))}
+          </select>
+          <select
+            className="op-select"
+            data-testid="camera-select"
+            aria-label="Select camera (keyboard)"
+            value={selectedCameraId ?? ''}
+            onChange={(e) => setSelectedCameraId(e.target.value || null)}>
+            <option value="">No camera selected</option>
+            {config.cameraRigs.map((rig) => (
+              <option key={rig.id} value={rig.id}>
+                {rig.id} · {cameraStates[rig.id] ?? 'OFFLINE'}
+              </option>
+            ))}
+          </select>
+        </div>
         <ParcelTimeline parcelId={effectiveId} stages={stages} />
         <ParcelResultCard
           parcel={effectiveLive}
@@ -126,6 +167,7 @@ export function OperationsView() {
           noReads={snap.noReads}
           droppedFrames={snap.droppedFrames}
         />
+        <LimitsPanel />
       </div>
     </section>
   );

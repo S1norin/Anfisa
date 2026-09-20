@@ -177,6 +177,48 @@ body {
   font-size: 0.9em;
 }
 
+/* keyboard selection mirrors (NFR-008) */
+
+.op-select-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.op-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 0.85em;
+}
+
+.op-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.limits-panel summary {
+  cursor: pointer;
+  font-size: 1em;
+}
+
+.limits-panel ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 0.82em;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.limits-panel li {
+  margin-bottom: 6px;
+}
+
 /* ---------- parcel timeline ---------- */
 
 .timeline {
@@ -211,6 +253,11 @@ body {
 
 .timeline-stage.current {
   background: rgba(77, 163, 255, 0.12);
+}
+
+/* non-color-only indicator for the current stage (NFR-008) */
+.timeline-stage.current .timeline-label::before {
+  content: '\25B8 '; /* ▸ */
 }
 
 .timeline-stage.current .timeline-dot {

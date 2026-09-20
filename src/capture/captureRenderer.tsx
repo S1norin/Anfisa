@@ -5,6 +5,7 @@ import { PingPongPool } from './pingpong';
 import { ArtifactPass } from './artifactPass';
 import { frameArtifacts } from './imageFormation';
 import type { PreviewMode } from './imageFormation';
+import type { WebGLRenderTarget } from 'three';
 import { cameraRigToPerspective } from '../scene/cameraRig';
 import { useSim } from '../store/simStore';
 import type { FrameObservation } from '../domain/types';
@@ -25,13 +26,23 @@ const pass = new ArtifactPass();
  * full FrameObservation metadata + the degraded texture into the bounded
  * frame buffer.
  *
+ * Logical captures stay at the camera's 20 Hz cadence (the geometry-model
+ * decode is texture-free); the GPU preview render is throttled to
+ * PREVIEW_MAX_HZ (NFR-002: previews target 5-10 visible updates/s) so six
+ * full-scene renders do not dominate the frame budget. Non-due captures
+ * reuse the latest rendered texture (≤ 125 ms stale — a preview).
+ *
  * Runs inside <Canvas> so it has the r3f renderer; returns null.
  */
+const PREVIEW_MAX_HZ = 8;
+const PREVIEW_MIN_INTERVAL_MS = 1000 / PREVIEW_MAX_HZ;
+
 export function CaptureRenderer() {
   const sim = useSim();
   const { scene, gl } = useThree();
   const consumedRef = useRef(0);
   const lastRunIdRef = useRef(sim.state.runId);
+  const lastRenderRef = useRef<Record<string, { ms: number; dst: WebGLRenderTarget }>>({});
 
   useFrame(() => {
     const state = sim.state;
@@ -42,6 +53,7 @@ export function CaptureRenderer() {
       frameBuffer.clear();
       pool.dispose();
       consumedRef.current = 0;
+      lastRenderRef.current = {};
     }
 
     // State rebuilds shrink the event array (reset) — rewind the cursor.
@@ -53,15 +65,28 @@ export function CaptureRenderer() {
       const rig = state.config.cameraRigs.find((r) => r.id === ev.cameraId);
       if (!rig) continue;
 
-      const { src, dst } = pool.acquire(
-        rig.id,
-        rig.preview.widthPx,
-        rig.preview.heightPx,
-      );
-      const cam = cameraRigToPerspective(rig);
-      gl.setRenderTarget(src);
-      gl.clear();
-      gl.render(scene, cam);
+      const last = lastRenderRef.current[rig.id];
+      const due =
+        !last || ev.simTimeMs - last.ms >= PREVIEW_MIN_INTERVAL_MS - 1;
+      let texture: WebGLRenderTarget;
+      if (due) {
+        const { src, dst } = pool.acquire(
+          rig.id,
+          rig.preview.widthPx,
+          rig.preview.heightPx,
+        );
+        const cam = cameraRigToPerspective(rig);
+        gl.setRenderTarget(src);
+        gl.clear();
+        gl.render(scene, cam);
+        pass.render(gl, src, dst);
+        gl.setRenderTarget(null);
+        lastRenderRef.current[rig.id] = { ms: ev.simTimeMs, dst };
+        texture = dst;
+      } else {
+        // Throttled: reuse the latest rendered preview texture.
+        texture = last.dst;
+      }
 
       const candidates = ev.candidateParcelIds
         .map((id) => state.parcels.get(id))
@@ -76,14 +101,14 @@ export function CaptureRenderer() {
         previewMode.current,
       );
 
-      pass.setParams(
-        artifacts.visual,
-        rig.preview.widthPx,
-        rig.preview.heightPx,
-        ev.simTimeMs / 1000,
-      );
-      pass.render(gl, src, dst);
-      gl.setRenderTarget(null);
+      if (due) {
+        pass.setParams(
+          artifacts.visual,
+          rig.preview.widthPx,
+          rig.preview.heightPx,
+          ev.simTimeMs / 1000,
+        );
+      }
 
       const frame: FrameObservation = {
         frameId,
@@ -103,7 +128,7 @@ export function CaptureRenderer() {
         labels: [],
         processingMode: 'GEOMETRY_MODEL',
       };
-      frameBuffer.push(frame, dst);
+      frameBuffer.push(frame, texture);
     }
   });
 
