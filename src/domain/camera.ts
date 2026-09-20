@@ -16,7 +16,7 @@ import type { CameraConfig, CameraState } from './types';
 // ---------------------------------------------------------------------------
 // Minimal vector/quaternion math (domain stays THREE-free).
 
-type V3 = [number, number, number];
+export type V3 = [number, number, number];
 
 export function normalize(v: V3): V3 {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
