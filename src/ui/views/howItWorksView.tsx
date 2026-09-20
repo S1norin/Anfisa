@@ -79,7 +79,7 @@ export function HowItWorksView() {
           }
         : undefined,
     });
-  }, [effectiveParcelId, state.events, state]);
+  }, [effectiveParcelId, state]);
 
   const stage = PROCESS_GUIDE[currentStep];
 

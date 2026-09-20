@@ -1,10 +1,11 @@
 # Anfisa · Conveyor Barcode Station
 
 An interactive Three.js demo of a synthetic belt-conveyor barcode reading
-station. A stream of parcels travels a fixed belt past a six-camera rig. The
-app runs a **deterministic domain simulation + capture/decode pipeline** and
-renders the station, live camera feeds, per-parcel pipeline state, and
-run-level metrics.
+station. A stream of parcels travels a fixed belt past a six-camera rig:
+four oblique area readers plus two encoder-synced **line scanners** on the
+top and bottom faces. The app runs a **deterministic domain simulation +
+capture/decode pipeline** and renders the station, live camera feeds,
+per-parcel pipeline state, and run-level metrics.
 
 Everything on screen is **synthetic ground truth**, not a real camera feed.
 The purpose is to demo the station's measurement model and the fail-safe
@@ -26,7 +27,7 @@ npm run dev        # http://localhost:5173  (Vite; the run auto-starts on load)
 Other commands:
 
 ```bash
-npm test           # vitest unit + deterministic e2e suites (357 tests)
+npm test           # vitest unit + deterministic e2e suites (480 tests)
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint
 npm run build      # typecheck + production bundle
@@ -40,7 +41,7 @@ The dev server uses a hash router, so deep links look like
 
 ## Views
 
-The top nav has four views. The domain run (config, seed, sim clock) is a
+The top nav has five views. The domain run (config, seed, sim clock) is a
 single shared store, so switching views does **not** reset the run — the same
 parcels keep moving.
 
@@ -85,6 +86,62 @@ read rate, no-read count, per-reason breakdown, association quality, and
 capture-to-decode latency. These are **synthetic ground-truth regression
 metrics**, not optical performance numbers.
 
+### How It Works
+
+The teaching view: an 11-stage process step rail (created → entry/tracking →
+reader triggering → acquisition → preprocessing → quality gating → decode →
+association → dedup/aggregation → exit/finalization → PLC ACK/sort) with
+keyboard prev/next, a lightweight HTML/CSS flow diagram, and live evidence
+cards that map a selected parcel's real event stream onto the stages
+(complete / in progress / pending / failed, with counts and reasons).
+The parcel selector follows the newest parcel by default. A callout reminds
+reviewers that decode accuracy is **analytic** (geometric projection +
+deterministic quality model), not a GPU image readout.
+
+---
+
+## Line-scan cameras (top/bottom)
+
+Config v3 extends `CameraConfig` into a discriminated union
+(`AREA_SCAN | LINE_SCAN`). The TOP and BOTTOM readers are line scanners:
+a line sensor across the belt acquires one row per encoder step while a
+parcel crosses the scan plane, so each parcel leaves a deterministic
+(encoder, cross-belt) **strip** of rows — no 2D frames, no rolling shutter.
+
+- **Encoder synchronization** — every line is stamped with the belt encoder
+  position (`encoderStepMmPerLine`), so the strip is a known mm-space image
+  of the parcel; travel-direction resolution comes from the encoder step,
+  not the exposure.
+- **Strip lifecycle** — a session opens when the parcel front crosses the
+  scan plane and closes at the rear crossing (or aborts on camera fault,
+  close spacing of a new parcel, or the max-strip bound). The closed strip
+  is observed (shared quality gating, GAP occlusion for bottom transfer)
+  and decoded analytically — decode consumes only the domain strip, never
+  preview pixels.
+- **Strip preview** — the camera wall shows a display-only reconstruction of
+  the strip in encoder-mapped form (banding, mapping jitter, missing lines
+  and motion smear from the rig's image effects are reproduced for
+  realism). It is a teaching aid; it is provably not the decode input.
+- **Association** — label observations associate to a parcel when the
+  parcel's encoder interval overlaps the strip's encoder span (interval
+  overlap, same as area frames' temporal association).
+
+The default preset ("Report layout · 4 oblique + top/bottom") implements
+the `Report Draft.md` geometry: four 9K area readers at 45° / 90° spacing,
+top + bottom line scanners, and a 100 mm conveyor gap for the bottom view.
+
+---
+
+## Config versions (v2 → v3)
+
+`CONFIG_VERSION` is 3. Importing an older config JSON runs
+`migrateConfigToLatest`: v2 rigs (which predate line scanners) are stamped
+`kind: 'AREA_SCAN'` and the version is bumped; unsupported versions are
+rejected with the original version reported. New configs can opt TOP/
+BOTTOM rigs into `LINE_SCAN` with the line block (`sensorWidthMm`,
+`pixelsPerLine`, `encoderStepMmPerLine`, `maxLineRateLinesPerSec`,
+`lineExposureUs`, `scanPlaneZMm`, …).
+
 ---
 
 ## Five-minute walkthrough
@@ -110,8 +167,9 @@ metrics**, not optical performance numbers.
 
 ### Available presets (Camera Lab → Preset)
 
-Recommended 6-view, Draft 4-oblique, Bottom gap transfer, Side-grip transfer,
-Glare stress, Small-module stress, Camera failure, Close spacing.
+Report layout · 4 oblique + top/bottom (default), Recommended 6-view, Draft
+4-oblique, Bottom gap transfer, Side-grip transfer, Glare stress,
+Small-module stress, Camera failure, Close spacing.
 
 ---
 
