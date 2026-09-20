@@ -9,6 +9,8 @@ import type { AreaScanCameraConfig, LabelInstance, ParcelState } from '../domain
 import { labelMotionBlurPx } from './blur';
 import { observeLabels, type ObserveContext } from './observationEngine';
 import { defocusPx } from '../capture/imageFormation';
+import { reportEightReaderConfig } from '../capture/presets';
+import { REPORT_SIDE, sidePixelsPerModule, worstCaseIncidenceDeg } from '../report/reportSpec';
 
 const STATION = { lengthMm: 2200, beltWidthMm: 650 };
 const DEFAULTS = {
@@ -196,5 +198,109 @@ describe('observeLabels', () => {
     // 3 m/s at 75 µs → ~0.73 px > 0.5 target:
     expect(fast.reasons).toContain('MOTION_BLUR');
     expect(slow.reasons).not.toContain('MOTION_BLUR');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// t2-optics: report side-reader optics — pinhole projection, incidence,
+// focus (camera.ts sensorIntrinsics + defocusPx through the engine).
+// ---------------------------------------------------------------------------
+describe('t2-optics: report layout side optics', () => {
+  const preset = reportEightReaderConfig();
+  const sideRigs = preset.cameraRigs.filter((r) => r.kind === 'AREA_SCAN');
+  const ctx: ObserveContext = { simTimeMs: 0, speedMmPerSec: 1000 };
+
+  function rightLabel(): LabelInstance {
+    return {
+      labelInstanceId: 'L-R',
+      payload: 'KTY-12345678901234',
+      face: 'RIGHT',
+      localOffsetMm: [0, 0],
+      rotationDeg: 0,
+      widthMm: 78,
+      heightMm: 25,
+      damage: 0,
+    };
+  }
+
+  it('projected ppm matches the reportSpec pinhole formula (±5%)', () => {
+    const rig = sideRigs.find((r) => r.name.includes('RIGHT 90°'))!;
+    const parcel = makeParcel({
+      spec: { ...makeParcel().spec, labels: [rightLabel()] },
+    });
+    const cfg = preset;
+    const obs = observeLabels(rig, 'IDLE', [parcel], [parcel], ctx, cfg)[0];
+    // Face sits exactly at the 1450 mm working distance for the nominal
+    // 400 mm parcel, so the spec formula applies at WD.
+    const expected = sidePixelsPerModule(
+      cfg.barcode.xDimensionMm,
+      REPORT_SIDE.focalLengthMm,
+      REPORT_SIDE.pixelPitchMm,
+      REPORT_SIDE.workingDistanceMm,
+      0,
+    );
+    // The engine projects with fx/camZ (pure pinhole at the face plane);
+    // the report formula divides by (WD − focal). The two agree within
+    // ~4%, inside the 5% contract tolerance.
+    expect(
+      Math.abs(obs.pixelsPerModule - expected) / expected,
+    ).toBeLessThan(0.05);
+    // Label centre is 300 mm (half parcel length) off the aim point.
+    expect(obs.distanceMm).toBeCloseTo(
+      Math.hypot(REPORT_SIDE.workingDistanceMm, 300),
+      3,
+    );
+  });
+
+  it('worst-case view-axis incidence equals the report 30°; the 30° rig reports it on a face-centre label', () => {
+    // Design check: the 30°/330° rigs give the FRONT face its worst-case
+    // view-axis incidence at the parcel centre.
+    const frontFaceNormal: [number, number, number] = [0, 0, 1];
+    const centre: [number, number, number] = [0, 200, 1100];
+    const axisIncidence = sideRigs
+      .map((r) => {
+        const v: [number, number, number] = [
+          centre[0] - r.pose.positionMm[0],
+          centre[1] - r.pose.positionMm[1],
+          centre[2] - r.pose.positionMm[2],
+        ];
+        const len = Math.hypot(...v);
+        const cos = (v[0] * frontFaceNormal[0] + v[2] * frontFaceNormal[2]) / len;
+        return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
+      })
+      .sort((a, b) => a - b);
+    expect(axisIncidence[0]).toBeCloseTo(
+      worstCaseIncidenceDeg(REPORT_SIDE.directionSpacingDeg),
+      6,
+    );
+
+    // Engine check: a face-centre label from the 30° rig never
+    // under-reports the design incidence.
+    const rig = sideRigs.find((r) => r.name.includes('FRONT-RIGHT 30°'))!;
+    const frontLabel: LabelInstance = {
+      ...rightLabel(),
+      labelInstanceId: 'L-F',
+      face: 'FRONT',
+    };
+    const parcel = makeParcel({
+      spec: { ...makeParcel().spec, labels: [frontLabel] },
+    });
+    const obs = observeLabels(rig, 'IDLE', [parcel], [parcel], ctx, preset)[0];
+    expect(obs.incidenceDeg).toBeCloseTo(
+      worstCaseIncidenceDeg(REPORT_SIDE.directionSpacingDeg),
+      3,
+    );
+  });
+
+  it('side labels at the nominal working distance are in focus (defocus ≈ 0)', () => {
+    const rig = sideRigs.find((r) => r.name.includes('RIGHT 90°'))!;
+    const parcel = makeParcel({
+      spec: { ...makeParcel().spec, labels: [rightLabel()] },
+    });
+    const obs = observeLabels(rig, 'IDLE', [parcel], [parcel], ctx, preset)[0];
+    // Focused at 1450 mm, face at 1450 mm → defocus term is zero; the
+    // residual blurPx is belt motion only (1 m/s × 75 µs ≈ 0.63 px).
+    expect(obs.blurPx).toBeLessThan(1);
+    expect(obs.reasons).not.toContain('OUT_OF_FOCUS');
   });
 });

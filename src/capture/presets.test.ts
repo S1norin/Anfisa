@@ -11,7 +11,7 @@ import {
   REPORT_BARCODE,
   REPORT_LINE,
   REPORT_SIDE,
-  REPORT_SIDE_MOUNTS,
+  reportSideMounts,
   REPORT_STATION,
 } from '../report/reportSpec';
 
@@ -40,19 +40,41 @@ describe('reportEightReaderConfig (final-report layout)', () => {
   });
 
   it('places the six side cameras at the report mount table positions', () => {
-    expect(areas).toHaveLength(REPORT_SIDE_MOUNTS.length);
+    // Mount circle radius = WD + nominal parcel half-width so the parcel
+    // face sits exactly at the report working distance.
+    const mounts = reportSideMounts(
+      cfg.station.lengthMm,
+      cfg.parcel.heightMm,
+      REPORT_SIDE.workingDistanceMm + cfg.parcel.widthMm / 2,
+    );
+    expect(areas).toHaveLength(mounts.length);
     areas.forEach((rig, i) => {
-      near(rig.pose.positionMm, REPORT_SIDE_MOUNTS[i].positionMm, 9);
+      near(rig.pose.positionMm, mounts[i].positionMm, 1e-6);
     });
   });
 
-  it('aims every side camera at the parcel centre (0, 200, 1100) at 1450 mm', () => {
+  it('focuses at the 1450 mm WD; on-axis rigs put the parcel face at WD', () => {
+    const centreZ = cfg.station.lengthMm / 2;
+    const radius = REPORT_SIDE.workingDistanceMm + cfg.parcel.widthMm / 2;
     for (const rig of areas) {
-      // Focus distance equals the report working distance (mount → centre).
+      // Focus plane = the report working distance.
       expect(rig.acquisition.focusDistanceMm).toBeCloseTo(
         REPORT_SIDE.workingDistanceMm,
         3,
       );
+      // All six lenses sit on the WD + width/2 circle aimed at the centre.
+      const p = rig.pose.positionMm;
+      expect(Math.hypot(p[0], p[2] - centreZ)).toBeCloseTo(radius, 6);
+      // The ±x (90°/270°) rigs view the face straight on, so the face
+      // centre is exactly at the working distance; the 30°-off rigs
+      // place it off-axis (focus stays on the WD plane).
+      if (Math.abs(p[2] - centreZ) < 1e-6) {
+        const faceX = Math.sign(p[0]) * (cfg.parcel.widthMm / 2);
+        expect(Math.abs(p[0] - faceX)).toBeCloseTo(
+          REPORT_SIDE.workingDistanceMm,
+          6,
+        );
+      }
     }
   });
 

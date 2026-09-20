@@ -28,6 +28,13 @@ import {
   type LabelObservationResult,
 } from '../../observation/observationEngine';
 import { parcelCentreWorldMm } from '../../observation/projection';
+import {
+  REPORT_SIDE,
+  sideFovWidthMm,
+  sideObjectMmPerPixel,
+  sidePixelsPerModule,
+  worstCaseIncidenceDeg,
+} from '../../report/reportSpec';
 
 /** Physical field of view + the world size visible at the target plane. */
 export interface LabFov {
@@ -38,10 +45,68 @@ export interface LabFov {
   planeHeightMm: number;
 }
 
+/** Report-side optics derived from a rig's own sensor + focus values. */
+export interface ReportSideOptics {
+  /** Object-space pixel pitch at the focus plane, mm/px. */
+  mmPerPx: number;
+  /** Projected pixels per module at 0° incidence. */
+  ppmAt0Deg: number;
+  /** Projected pixels per module at the report's worst-case incidence. */
+  ppmAtWorstDeg: number;
+  /** Worst-case incidence the report designs for, degrees. */
+  worstIncidenceDeg: number;
+  /** Horizontal FOV at the focus plane, mm. */
+  fovWidthMm: number;
+  /** Worst-case PPM clears the configured ppm floor. */
+  ppmOk: boolean;
+}
+
+/**
+ * Report check for an area side reader (t2-optics): derives the
+ * object-space pixel pitch, pixels-per-module (0° and worst-case
+ * incidence) and the FOV at the rig's focus plane from the rig's own
+ * sensor values, using the shared reportSpec pinhole math.
+ */
+export function reportSideOptics(
+  rig: AreaScanCameraConfig,
+  config: SimConfig,
+): ReportSideOptics {
+  const s = rig.sensor;
+  const pitch = s.filmGaugeMm / s.widthPx; // sensor pixel pitch, mm
+  const focal = s.focalLengthMm;
+  const wd = rig.acquisition.focusDistanceMm;
+  const worst = worstCaseIncidenceDeg(REPORT_SIDE.directionSpacingDeg);
+  const mmPerPx = sideObjectMmPerPixel(focal, pitch, wd);
+  const ppmAt0Deg = sidePixelsPerModule(
+    config.barcode.xDimensionMm,
+    focal,
+    pitch,
+    wd,
+    0,
+  );
+  const ppmAtWorstDeg = sidePixelsPerModule(
+    config.barcode.xDimensionMm,
+    focal,
+    pitch,
+    wd,
+    worst,
+  );
+  return {
+    mmPerPx,
+    ppmAt0Deg,
+    ppmAtWorstDeg,
+    worstIncidenceDeg: worst,
+    fovWidthMm: sideFovWidthMm(focal, s.filmGaugeMm, wd),
+    ppmOk: ppmAtWorstDeg >= config.quality.ppmMin,
+  };
+}
+
 export interface LabReport {
   fov: LabFov;
   /** Camera → parcel centre distance (mm). */
   distanceMm: number;
+  /** Report check derived from the rig's sensor + focus values. */
+  report: ReportSideOptics;
   /** Every label on the parcel from this rig, best (confidence) first. */
   labels: LabelObservationResult[];
   best: LabelObservationResult | null;
@@ -118,6 +183,7 @@ export function computeLabReport(
   return {
     fov: { vFovDeg: vFov, hFovDeg: hFov, planeWidthMm, planeHeightMm },
     distanceMm,
+    report: reportSideOptics(rig, config),
     labels,
     best: labels[0] ?? null,
   };

@@ -33,7 +33,7 @@ export function LabReportView({
       </div>
     );
   }
-  const { fov, distanceMm, labels, best } = report;
+  const { fov, distanceMm, report: rpt, labels, best } = report;
   return (
     <div className="lab-report" data-testid="lab-report">
       <div className="lab-metrics">
@@ -41,6 +41,12 @@ export function LabReportView({
         <Row k="hFOV" v={`${fmt(fov.hFovDeg, 2)}°`} />
         <Row k="FOV @ target" v={`${fmt(fov.planeWidthMm, 0)} × ${fmt(fov.planeHeightMm, 0)} mm`} />
         <Row k="Distance" v={`${fmt(distanceMm, 0)} mm`} />
+        <Row k="Report mm/px" v={fmt(rpt.mmPerPx, 4)} />
+        <Row k="Report PPM @0°" v={fmt(rpt.ppmAt0Deg, 2)} />
+        <Row
+          k={`Report PPM @${rpt.worstIncidenceDeg}°`}
+          v={`${fmt(rpt.ppmAtWorstDeg, 2)} (${rpt.ppmOk ? 'PASS' : 'FAIL'})`}
+        />
       </div>
 
       <h4>Labels ({labels.length})</h4>

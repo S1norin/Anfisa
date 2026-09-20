@@ -268,7 +268,15 @@ export function reportEightReaderConfig(): SimConfig {
     lengthMm: cfg.station.lengthMm,
     beltWidthMm: cfg.belt.widthMm,
   };
-  const mounts = reportSideMounts(cfg.station.lengthMm, cfg.parcel.heightMm);
+  // The report's 1450 mm working distance is the lens → parcel FACE
+  // distance. The preset targets the nominal 400 mm wide parcel, so the
+  // mount circle is WD + width/2 from the parcel centre.
+  const sideRadiusMm = REPORT_SIDE.workingDistanceMm + cfg.parcel.widthMm / 2;
+  const mounts = reportSideMounts(
+    cfg.station.lengthMm,
+    cfg.parcel.heightMm,
+    sideRadiusMm,
+  );
   const base = defaultCameraRigs(station, {
     sensorWidthPx: REPORT_SIDE.sensorWidthPx,
     sensorHeightPx: REPORT_SIDE.sensorHeightPx,
@@ -276,6 +284,10 @@ export function reportEightReaderConfig(): SimConfig {
     exposureUs: REPORT_SIDE.exposureUsPreset,
     fps: REPORT_SIDE.fpsPreset,
     shutter: REPORT_SIDE.shutter,
+    // 36.0 mm × 4.5 µm imager (reportSpec), focused at the 1450 mm
+    // working distance so side labels sit in the depth of field.
+    filmGaugeMm: REPORT_SIDE.filmGaugeWidthMm,
+    focusDistanceMm: REPORT_SIDE.workingDistanceMm,
   });
   const template = base.find((r) => r.role === 'FRONT')!;
   // Human names follow the direction angles (from +z toward +x).
@@ -287,8 +299,8 @@ export function reportEightReaderConfig(): SimConfig {
     'Side reader · LEFT 270°',
     'Side reader · FRONT-LEFT 330°',
   ];
-  const sides: AreaScanCameraConfig[] = mounts.map((m, i) =>
-    aim(
+  const sides: AreaScanCameraConfig[] = mounts.map((m, i) => {
+    const aimed = aim(
       {
         ...template,
         id: `CAM-${String(i + 1).padStart(3, '0')}`,
@@ -297,8 +309,14 @@ export function reportEightReaderConfig(): SimConfig {
       },
       m.positionMm,
       m.targetMm,
-    ),
-  );
+    );
+    // aim() refocuses on the aim target (parcel centre); the report's
+    // focus plane is the parcel FACE at the 1450 mm working distance.
+    return {
+      ...aimed,
+      acquisition: { ...aimed.acquisition, focusDistanceMm: REPORT_SIDE.workingDistanceMm },
+    };
+  });
 
   // Top/bottom line scanners: the report's 715 mm FOV, 8192 px, 0.1 mm
   // step, 12 kHz ceiling; top plane 150 mm above the parcel top, bottom

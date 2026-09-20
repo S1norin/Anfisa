@@ -195,6 +195,10 @@ export function defaultCameraRigs(
     exposureUs: number;
     fps: number;
     shutter: 'GLOBAL' | 'ROLLING';
+    /** Physical film-gauge width, mm (default 23.5 mm demo sensor). */
+    filmGaugeMm?: number;
+    /** Nominal focus distance, mm (default 1000). */
+    focusDistanceMm?: number;
   },
 ): AreaScanCameraConfig[] {
   const cz = STATION_CENTER_Z(station.lengthMm);
@@ -222,7 +226,7 @@ export function defaultCameraRigs(
       widthPx: defaults.sensorWidthPx,
       heightPx: defaults.sensorHeightPx,
       focalLengthMm: defaults.focalLengthMm,
-      filmGaugeMm: 23.5,
+      filmGaugeMm: defaults.filmGaugeMm ?? 23.5,
       nearMm: 50,
       farMm: 8000,
     },
@@ -231,7 +235,7 @@ export function defaultCameraRigs(
       exposureUs: defaults.exposureUs,
       gainDb: 0,
       shutter: defaults.shutter,
-      focusDistanceMm: 1000,
+      focusDistanceMm: defaults.focusDistanceMm ?? 1000,
       rollingReadoutUs: 30000,
     },
     illumination: {

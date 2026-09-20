@@ -3,12 +3,22 @@
  * pinhole model and the pipeline's own observation engine.
  */
 import { describe, expect, it } from 'vitest';
-import { recommendedSixViewConfig } from '../../capture/presets';
+import {
+  recommendedSixViewConfig,
+  reportEightReaderConfig,
+} from '../../capture/presets';
 import type { AreaScanCameraConfig, LabelInstance, ParcelState } from '../../domain/types';
+import {
+  REPORT_SIDE,
+  sideFovWidthMm,
+  sideObjectMmPerPixel,
+  worstCaseIncidenceDeg,
+} from '../../report/reportSpec';
 import {
   computeLabReport,
   lookAtPoint,
   lookTargetMm,
+  reportSideOptics,
   vFovDeg,
 } from './labReport';
 
@@ -135,6 +145,80 @@ describe('computeLabReport', () => {
     const frontSlow = slow.labels.find((l) => l.face === 'FRONT')!;
     const frontFast = fast.labels.find((l) => l.face === 'FRONT')!;
     expect(frontFast.blurPx).toBeGreaterThan(frontSlow.blurPx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// t2-optics: report-8reader side rig — the report check derives the
+// reportSpec pinhole values from the rig's own sensor + focus numbers.
+// ---------------------------------------------------------------------------
+describe('reportSideOptics (t2-optics: report-8reader side rig)', () => {
+  const cfg = reportEightReaderConfig();
+  const rig = cfg.cameraRigs.find(
+    (r): r is AreaScanCameraConfig =>
+      r.kind === 'AREA_SCAN' && r.name.includes('RIGHT 90°'),
+  )!;
+
+  it('derives mm/px, worst-case ppm and FOV from the rig sensor + focus', () => {
+    const r = reportSideOptics(rig, cfg);
+    const s = REPORT_SIDE;
+    // Object-space pitch: 55 × (36/8000) / (1450 − 55) ≈ 0.1141 mm/px.
+    expect(r.mmPerPx).toBeCloseTo(
+      sideObjectMmPerPixel(s.focalLengthMm, s.pixelPitchMm, s.workingDistanceMm),
+      6,
+    );
+    expect(r.mmPerPx).toBeCloseTo(0.1141, 3);
+    // 0.35 mm module → 3.07 px at 0°, 3.54 px at 30° ≥ ppmMin 2.0.
+    expect(r.ppmAt0Deg).toBeCloseTo(3.07, 1);
+    expect(r.ppmAtWorstDeg).toBeCloseTo(3.54, 2);
+    expect(r.ppmAtWorstDeg).toBeGreaterThanOrEqual(cfg.quality.ppmMin);
+    expect(r.ppmOk).toBe(true);
+    // Horizontal FOV at the focus plane ≈ 949 mm → covers the 400 mm parcel.
+    expect(r.fovWidthMm).toBeCloseTo(
+      sideFovWidthMm(s.focalLengthMm, s.filmGaugeWidthMm, s.workingDistanceMm),
+      6,
+    );
+    expect(r.fovWidthMm).toBeGreaterThan(cfg.parcel.widthMm);
+    expect(r.worstIncidenceDeg).toBeCloseTo(
+      worstCaseIncidenceDeg(s.directionSpacingDeg),
+      6,
+    );
+  });
+
+  it('the engine PPM shown by the lab report matches the helper (±5%)', () => {
+    const rightLabel: LabelInstance = {
+      labelInstanceId: 'LAB-RIGHT',
+      payload: 'TEST-RIGHT-0001',
+      face: 'RIGHT',
+      localOffsetMm: [0, 0],
+      rotationDeg: 0,
+      widthMm: 78,
+      heightMm: 25,
+      damage: 0,
+    };
+    const parcel: ParcelState = {
+      parcelId: 'LAB-PAR-8R',
+      spec: {
+        widthMm: 400,
+        heightMm: 400,
+        lengthMm: 600,
+        lateralOffsetMm: 0,
+        yawDeg: 0,
+        material: 'KRAFT',
+        tape: false,
+        labels: [rightLabel],
+      },
+      spawnSimTimeMs: 0,
+      spawnEncoderMm: 0,
+      frontZMm: 1100, // centre at z = 800 → face centre at the aim z
+      phase: 'ENTERED',
+    };
+    const report = computeLabReport(rig, 'IDLE', parcel, [parcel], 0, 1000, cfg);
+    const helper = reportSideOptics(rig, cfg);
+    const right = report.labels.find((l) => l.face === 'RIGHT')!;
+    expect(
+      Math.abs(right.pixelsPerModule - helper.ppmAt0Deg) / helper.ppmAt0Deg,
+    ).toBeLessThan(0.05);
   });
 });
 
