@@ -84,7 +84,7 @@ describe('rendered line-scan rig (t8)', () => {
     const housing = boxArgs(rigMeshes[0]);
     const marker = boxArgs(rigMeshes[1]);
     const plane = boxArgs(worldMeshes[0]);
-    const w = rig.line.sensorWidthMm * 0.001;
+    const w = rig.line.fovWidthMm * 0.001;
 
     // Long narrow housing, sensor axis along Y.
     expect(housing[1]).toBeCloseTo(w + 0.04, 6);

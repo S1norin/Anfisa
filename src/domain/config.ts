@@ -6,7 +6,7 @@
 import { defaultCameraRigs, defaultEffectToggles, validateCameraRigs } from './camera';
 import type { CameraConfig, MaterialPreset } from './types';
 
-export const CONFIG_VERSION = 3;
+export const CONFIG_VERSION = 4;
 
 /**
  * Width of the GAP transfer's bottom opening, mm (AC-05 / issue #8).
@@ -338,11 +338,22 @@ export function industrialReaderCameraPreset(
 
 /**
  * Migrate a parsed config from any supported legacy version to the
- * latest shape (CFG-007). v2 → v3: line scanners did not exist in v2, so
- * every rig becomes an area scanner — add `kind: 'AREA_SCAN'` (only if
- * absent) and bump the version. Returns null for non-objects or
- * unsupported versions; the caller then reports the original version
- * error.
+ * latest shape (CFG-007).
+ *
+ * v2 → v3: line scanners did not exist in v2, so every rig becomes an
+ * area scanner — add `kind: 'AREA_SCAN'` (only if absent) and bump the
+ * version.
+ *
+ * v3 → v4: the ambiguous line `sensorWidthMm` (object-space coverage in
+ * every shipped preset) is split into `physicalSensorWidthMm` +
+ * `fovWidthMm`. The legacy value is preserved as the FOV — it is NEVER
+ * reinterpreted as a physical sensor length. The physical width is
+ * derived from the pixel count at a 5 µm line-sensor pixel (labelled
+ * assumption: 8192 px → 40.96 mm), so the object-space pixel pitch
+ * (fovWidthMm / pixelsPerLine) is bit-identical to the v3 pitch.
+ *
+ * Returns null for non-objects or unsupported versions; the caller then
+ * reports the original version error.
  */
 export function migrateConfigToLatest(raw: unknown): SimConfig | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -356,8 +367,29 @@ export function migrateConfigToLatest(raw: unknown): SimConfig | null {
         ? { kind: 'AREA_SCAN', ...(r as Record<string, unknown>) }
         : r,
     );
-  } else {
+    cfg.version = 3;
+  } else if (version !== 3) {
     return null;
+  }
+  if (cfg.version === 3) {
+    const rigs = (cfg.cameraRigs as unknown[] | undefined) ?? [];
+    cfg.cameraRigs = rigs.map((r) => {
+      if (typeof r !== 'object' || r === null) return r;
+      const rig = r as Record<string, unknown>;
+      if (rig.kind !== 'LINE_SCAN' || typeof rig.line !== 'object' || rig.line === null) {
+        return rig;
+      }
+      const line = { ...(rig.line as Record<string, unknown>) };
+      const pixelsPerLine = typeof line.pixelsPerLine === 'number' ? line.pixelsPerLine : 8192;
+      if (!('physicalSensorWidthMm' in line)) {
+        line.physicalSensorWidthMm = pixelsPerLine * 0.005; // 5 µm pixel
+      }
+      if (!('fovWidthMm' in line)) {
+        line.fovWidthMm = typeof line.sensorWidthMm === 'number' ? line.sensorWidthMm : 512;
+      }
+      delete line.sensorWidthMm;
+      return { ...rig, line };
+    });
   }
   cfg.version = CONFIG_VERSION;
   return cfg as unknown as SimConfig;

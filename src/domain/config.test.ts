@@ -1,4 +1,5 @@
-import { defaultConfig, validateConfig } from './config';
+import { CONFIG_VERSION, defaultConfig, migrateConfigToLatest, validateConfig } from './config';
+import { defaultLineScanRig } from './camera';
 
 describe('SimConfig defaults (§4)', () => {
   it('matches the plan defaults', () => {
@@ -65,5 +66,82 @@ describe('SimConfig defaults (§4)', () => {
     cfg.version = 99;
     expect(cfg.version).toBe(99);
     expect(validateConfig(cfg).map((e) => e.path)).toContain('version');
+  });
+});
+
+describe('migrateConfigToLatest (CFG-007)', () => {
+  it('migrates a v3 LINE_SCAN rig: sensorWidthMm becomes fovWidthMm, physical derived at 5 µm', () => {
+    const cfg = defaultConfig();
+    const line = defaultLineScanRig(
+      'CAM-L01',
+      'TOP',
+      [0, 2000, 1100],
+      [0, 0, 0, 1],
+      0,
+    );
+    // Re-shape to the v3 line block (sensorWidthMm only).
+    const v3Line = {
+      pixelsPerLine: line.line.pixelsPerLine,
+      sensorWidthMm: 512,
+      encoderStepMmPerLine: line.line.encoderStepMmPerLine,
+      maxLineRateLinesPerSec: line.line.maxLineRateLinesPerSec,
+      lineExposureUs: line.line.lineExposureUs,
+      scanPlaneZMm: line.line.scanPlaneZMm,
+      mappingJitterMm: line.line.mappingJitterMm,
+      missingLineChance: line.line.missingLineChance,
+      bandingAmpMm: line.line.bandingAmpMm,
+    };
+    cfg.cameraRigs = [line];
+    (cfg.cameraRigs[0] as typeof line).line = v3Line as typeof line.line;
+    cfg.version = 3;
+
+    const migrated = migrateConfigToLatest(cfg) as typeof cfg;
+    expect(migrated).not.toBeNull();
+    const mLine = (migrated.cameraRigs[0] as typeof line).line;
+    expect(mLine.fovWidthMm).toBe(512); // legacy value preserved as FOV
+    expect(mLine.physicalSensorWidthMm).toBeCloseTo(8192 * 0.005, 9); // 40.96
+    expect('sensorWidthMm' in mLine).toBe(false);
+    expect(migrated.version).toBe(CONFIG_VERSION);
+  });
+
+  it('preserves the object-space pixel pitch bit-for-bit (512/8192 = 0.0625 mm/px)', () => {
+    const cfg = defaultConfig();
+    const line = defaultLineScanRig('CAM-L01', 'TOP', [0, 2000, 1100], [0, 0, 0, 1], 0);
+    (cfg.cameraRigs[0] as typeof line).line = {
+      ...line.line,
+      sensorWidthMm: 512,
+    } as (typeof line)['line'] & { sensorWidthMm: number };
+    cfg.version = 3;
+
+    const migrated = migrateConfigToLatest(cfg)!;
+    const mLine = (migrated.cameraRigs[0] as typeof line).line;
+    expect(mLine.fovWidthMm / mLine.pixelsPerLine).toBeCloseTo(0.0625, 9);
+  });
+
+  it('keeps already-split v3 rigs intact (idempotent on physical/fov fields)', () => {
+    const cfg = defaultConfig();
+    const line = defaultLineScanRig('CAM-L01', 'TOP', [0, 2000, 1100], [0, 0, 0, 1], 0);
+    cfg.cameraRigs = [line];
+    cfg.version = 3;
+
+    const migrated = migrateConfigToLatest(cfg)!;
+    const mLine = (migrated.cameraRigs[0] as typeof line).line;
+    expect(mLine.physicalSensorWidthMm).toBe(line.line.physicalSensorWidthMm);
+    expect(mLine.fovWidthMm).toBe(line.line.fovWidthMm);
+  });
+
+  it('migrates v2 configs through v3 to v4 (area rigs untouched)', () => {
+    const cfg = defaultConfig();
+    cfg.version = 2;
+    const migrated = migrateConfigToLatest(cfg)!;
+    expect(migrated.version).toBe(CONFIG_VERSION);
+    for (const r of migrated.cameraRigs) expect(r.kind).toBe('AREA_SCAN');
+  });
+
+  it('rejects version 4+1 and null', () => {
+    const cfg = defaultConfig();
+    cfg.version = CONFIG_VERSION + 1;
+    expect(migrateConfigToLatest(cfg)).toBeNull();
+    expect(migrateConfigToLatest(null)).toBeNull();
   });
 });

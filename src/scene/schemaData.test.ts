@@ -259,7 +259,7 @@ describe('line-scan annotations (t10)', () => {
         a.planeCorners[1][1] - a.planeCorners[0][1],
         a.planeCorners[1][2] - a.planeCorners[0][2],
       );
-      expect(span).toBeCloseTo(rig.line.sensorWidthMm, 6);
+      expect(span).toBeCloseTo(rig.line.fovWidthMm, 6);
       // The plane sits at the encoder-synced scanPlaneZMm (deck level
       // y = 0), with at most the 2 mm slab half-thickness along travel.
       for (const c of a.planeCorners) {
@@ -271,7 +271,7 @@ describe('line-scan annotations (t10)', () => {
       expect(a.axis.to[2]).toBeCloseTo(rig.line.scanPlaneZMm, 6);
       // The label carries the new line fields.
       expect(a.label).toContain(rig.id);
-      expect(a.sub).toContain(String(rig.line.sensorWidthMm));
+      expect(a.sub).toContain(String(rig.line.fovWidthMm));
       expect(a.sub).toContain(String(rig.line.scanPlaneZMm));
     }
   });

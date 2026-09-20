@@ -162,7 +162,7 @@ describe('LabControls', () => {
     renderControls({ config: cfg, selectedCameraId: id });
     const edit = within(screen.getByTestId('lab-edit'));
     expect(edit.getByTestId('lab-line-fields')).toBeTruthy();
-    expect(edit.getByLabelText('Sensor width mm')).toBeTruthy();
+    expect(edit.getByLabelText('FOV width mm (scan plane)')).toBeTruthy();
     expect(edit.getByLabelText('Pixels/line')).toBeTruthy();
     expect(edit.getByLabelText('Encoder step mm/line')).toBeTruthy();
     expect(edit.getByLabelText('Max line rate (lines/s)')).toBeTruthy();
@@ -180,13 +180,13 @@ describe('LabControls', () => {
   it('a line-field edit commits through the live config; siblings untouched (t10)', () => {
     const { cfg, id } = lineRigId();
     const props = renderControls({ config: cfg, selectedCameraId: id });
-    const width = within(screen.getByTestId('lab-edit')).getByLabelText('Sensor width mm');
+    const width = within(screen.getByTestId('lab-edit')).getByLabelText('FOV width mm (scan plane)');
     fireEvent.change(width, { target: { value: '480' } });
     expect(props.onCommit).toHaveBeenCalledTimes(1);
     const mutator = props.onCommit.mock.calls[0][0] as (c: SimConfig) => SimConfig;
     const next = mutator(cfg);
     const rig = next.cameraRigs.find((r) => r.id === id)! as LineScanCameraConfig;
-    expect(rig.line.sensorWidthMm).toBe(480);
+    expect(rig.line.fovWidthMm).toBe(480);
     // A sibling rig is unchanged.
     const other = next.cameraRigs.find((r) => r.id !== id)!;
     expect(other).toEqual(cfg.cameraRigs.find((r) => r.id !== id));

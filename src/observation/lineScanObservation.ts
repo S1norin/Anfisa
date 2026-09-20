@@ -122,17 +122,17 @@ export function observeLineScanStrip(
   if (input.deckOccluded) return null;
 
   const face: Face = rig.role === 'BOTTOM' ? 'BOTTOM' : 'TOP';
-  const { pixelsPerLine, sensorWidthMm, encoderStepMmPerLine, lineExposureUs } =
+  const { pixelsPerLine, fovWidthMm, encoderStepMmPerLine, lineExposureUs } =
     rig.line;
   const requiredRate = requiredLineRate(input.beltSpeedMmPerSec, encoderStepMmPerLine);
   const underSampled = requiredRate > rig.line.maxLineRateLinesPerSec;
   // xDimensionMm = 1 mm normalizes both axes to per-module density;
   // the encoder span [encoderStartMm, encoderEndMm] is reported in the
   // observation for audit (encoder-corrected travel).
-  const ppm = effectivePpm(1, pixelsPerLine, sensorWidthMm, encoderStepMmPerLine);
+  const ppm = effectivePpm(1, pixelsPerLine, fovWidthMm, encoderStepMmPerLine);
   const blurPx =
     (input.beltSpeedMmPerSec * (lineExposureUs / 1e6)) /
-    pixelPitchMm(pixelsPerLine, sensorWidthMm);
+    pixelPitchMm(pixelsPerLine, fovWidthMm);
   const coverage = strip.complete
     ? 1
     : clamp01(strip.lineCount / Math.max(1, strip.expectedLineCount));

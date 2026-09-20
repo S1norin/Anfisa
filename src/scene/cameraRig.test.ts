@@ -42,7 +42,7 @@ describe('line-scan rig layout (t8)', () => {
     const rig = lineRig('TOP');
     const l = lineRigLayout(rig);
     // Long axis = sensor width + margin; the other two axes stay small.
-    expect(l.housingM[1]).toBeCloseTo(rig.line.sensorWidthMm * 0.001 + 0.04, 9);
+    expect(l.housingM[1]).toBeCloseTo(rig.line.fovWidthMm * 0.001 + 0.04, 9);
     expect(l.housingM[1]).toBeGreaterThan(l.housingM[0] * 3);
     expect(l.housingM[1]).toBeGreaterThan(l.housingM[2] * 3);
   });
@@ -50,7 +50,7 @@ describe('line-scan rig layout (t8)', () => {
   it('optical line marker spans the sensor on the front (-Z) face', () => {
     const rig = lineRig('TOP');
     const l = lineRigLayout(rig);
-    expect(l.lineMarkerM[1]).toBeCloseTo(rig.line.sensorWidthMm * 0.001, 9);
+    expect(l.lineMarkerM[1]).toBeCloseTo(rig.line.fovWidthMm * 0.001, 9);
     expect(l.lineMarkerM[0]).toBeLessThan(l.housingM[0] / 2); // thin strip
     expect(l.lineMarkerPosM[2]).toBeLessThan(0); // optical front face
     expect(l.lineMarkerPosM[0]).toBe(0);
@@ -65,7 +65,7 @@ describe('line-scan rig layout (t8)', () => {
       expect(l.scanPlanePosM[0]).toBeCloseTo(rig.pose.positionMm[0] * 0.001, 9);
       expect(l.scanPlanePosM[1]).toBeCloseTo(rig.pose.positionMm[1] * 0.001, 9);
       // The plane spans the sensor width, thin in the travel direction.
-      expect(l.scanPlaneSizeM[0]).toBeCloseTo(rig.line.sensorWidthMm * 0.001, 9);
+      expect(l.scanPlaneSizeM[0]).toBeCloseTo(rig.line.fovWidthMm * 0.001, 9);
       expect(l.scanPlaneSizeM[2]).toBeLessThan(l.scanPlaneSizeM[0]);
     }
   });

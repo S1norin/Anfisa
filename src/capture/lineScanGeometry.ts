@@ -35,18 +35,22 @@ export function completedLineCount(
   return Math.floor(travelMm / encoderStepMmPerLine);
 }
 
-/** Belt width covered by one line-sensor pixel, mm. */
-export function pixelPitchMm(pixelsPerLine: number, sensorWidthMm: number): number {
-  return sensorWidthMm / pixelsPerLine;
+/**
+ * Object-space belt width covered by one line pixel, mm: the scan-plane
+ * FOV divided by the pixel count. (Physical sensor size is NOT an input —
+ * see the v4 split in types.ts.)
+ */
+export function pixelPitchMm(pixelsPerLine: number, fovWidthMm: number): number {
+  return fovWidthMm / pixelsPerLine;
 }
 
 /** Pixels per barcode module across the belt (cross-belt ppm). */
 export function crossBeltPpm(
   xDimensionMm: number,
   pixelsPerLine: number,
-  sensorWidthMm: number,
+  fovWidthMm: number,
 ): number {
-  return xDimensionMm / pixelPitchMm(pixelsPerLine, sensorWidthMm);
+  return xDimensionMm / pixelPitchMm(pixelsPerLine, fovWidthMm);
 }
 
 /** Travel lines per barcode module (along-travel sample density). */
@@ -61,10 +65,10 @@ export function travelPpm(xDimensionMm: number, encoderStepMmPerLine: number): n
 export function effectivePpm(
   xDimensionMm: number,
   pixelsPerLine: number,
-  sensorWidthMm: number,
+  fovWidthMm: number,
   encoderStepMmPerLine: number,
 ): number {
-  return Math.min(crossBeltPpm(xDimensionMm, pixelsPerLine, sensorWidthMm), travelPpm(xDimensionMm, encoderStepMmPerLine));
+  return Math.min(crossBeltPpm(xDimensionMm, pixelsPerLine, fovWidthMm), travelPpm(xDimensionMm, encoderStepMmPerLine));
 }
 
 /** Per-edge plane-crossing result for one sim step. */

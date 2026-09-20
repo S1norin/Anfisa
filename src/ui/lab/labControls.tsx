@@ -173,7 +173,7 @@ export function LabControls({
 
   /** Derived line-scan readouts (mm/s line rate, mm/line pitch, …). */
   const line = rig?.kind === 'LINE_SCAN' ? rig.line : null;
-  const linePitchMm = line ? line.sensorWidthMm / line.pixelsPerLine : 0;
+  const linePitchMm = line ? line.fovWidthMm / line.pixelsPerLine : 0;
   // The scan plane sits at deck level (y = 0); for the TOP/BOTTOM presets
   // the rig's y offset is exactly the working distance.
   const workingDistanceMm = rig && line ? Math.abs(rig.pose.positionMm[1]) : 0;
@@ -638,15 +638,19 @@ export function LabControls({
             <div data-testid="lab-line-fields">
               <Section title="Line sensor">
                 <Field
-                  label="Sensor width mm"
-                  value={rig.line.sensorWidthMm}
+                  label="FOV width mm (scan plane)"
+                  value={rig.line.fovWidthMm}
                   step={16}
                   onValue={(n) =>
                     patchLine((r) => ({
                       ...r,
-                      line: { ...r.line, sensorWidthMm: n },
+                      line: { ...r.line, fovWidthMm: n },
                     }))
                   }
+                />
+                <Readout
+                  label="Physical sensor mm"
+                  value={rig.line.physicalSensorWidthMm.toString()}
                 />
                 <Field
                   label="Pixels/line"

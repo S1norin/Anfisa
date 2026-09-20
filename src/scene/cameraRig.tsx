@@ -102,7 +102,7 @@ export interface LineRigLayout {
 const LINE_HOUSING_MARGIN_M = 0.02; // per-side housing overhang past the sensor
 
 export function lineRigLayout(rig: LineScanCameraConfig): LineRigLayout {
-  const w = rig.line.sensorWidthMm * MM;
+  const w = rig.line.fovWidthMm * MM; // scan-plane FOV, not the physical sensor
   const depth = 0.05;
   return {
     housingM: [0.06, w + 2 * LINE_HOUSING_MARGIN_M, depth],

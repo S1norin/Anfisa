@@ -100,7 +100,7 @@ function boxBlur(v: Float32Array, radius: number): void {
  */
 export function buildStripTexture(input: StripPreviewInput): StripTexture {
   const { rig, parcelId, strip, seed } = input;
-  const { pixelsPerLine, sensorWidthMm, lineExposureUs } = rig.line;
+  const { pixelsPerLine, fovWidthMm, lineExposureUs } = rig.line;
   const { jitter, missingLineChance, banding } = rig.imageEffects;
 
   const cols = Math.max(1, Math.min(pixelsPerLine, MAX_DISPLAY_COLS));
@@ -115,7 +115,7 @@ export function buildStripTexture(input: StripPreviewInput): StripTexture {
   // rescaled from sensor pixels to display columns.
   const blurPx =
     (input.beltSpeedMmPerSec * (lineExposureUs / 1e6)) /
-    pixelPitchMm(pixelsPerLine, sensorWidthMm);
+    pixelPitchMm(pixelsPerLine, fovWidthMm);
   const radius = Math.min(cols, Math.round((blurPx * pixelsPerLine) / cols));
 
   const data = new Uint8ClampedArray(cols * rows * 4);

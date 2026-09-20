@@ -255,7 +255,7 @@ export function lineScanAnnotations(rigs: CameraConfig[]): LineScanAnnotation[] 
     .map((rig) => {
       const p = rig.pose.positionMm;
       const axes = localAxes(rig.pose.quaternion);
-      const halfW = rig.line.sensorWidthMm / 2;
+      const halfW = rig.line.fovWidthMm / 2; // scan-plane FOV extent
       const eps = 2; // slab half-thickness along the travel axis (mm)
       const center: V3 = [p[0], 0, rig.line.scanPlaneZMm];
       const corner = (sy: number, sx: number): V3 => [
@@ -266,7 +266,7 @@ export function lineScanAnnotations(rigs: CameraConfig[]): LineScanAnnotation[] 
       return {
         rigId: rig.id,
         label: `${rig.id} · ${rig.role} — line scan`,
-        sub: `${rig.line.sensorWidthMm} mm sensor · ${rig.line.pixelsPerLine} px/line · plane Z ${rig.line.scanPlaneZMm} mm`,
+        sub: `${rig.line.fovWidthMm} mm FOV · ${rig.line.pixelsPerLine} px/line · plane Z ${rig.line.scanPlaneZMm} mm`,
         planeCorners: [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)],
         axis: { from: [...p] as V3, to: center },
       };

@@ -260,11 +260,12 @@ export function defaultCameraRigs(
 }
 
 /**
- * A line-scan rig with demo-assumption defaults (v3, LINE_SCAN). The
- * 8192 px × 512 mm line gives a 0.0625 mm pixel pitch across a 650 mm
- * belt; 0.1 mm/line encoder step gives ~4 travel lines per 0.4 mm module
- * (clears the default ppmMin 2.0); the 12 k lines/s ceiling saturates at
- * 1.2 m/s, so 1.5 m/s intentionally undersamples (LOW_PPM by design).
+ * A line-scan rig with demo-assumption defaults (v4, LINE_SCAN). The
+ * 8192 px line over a 512 mm scan-plane FOV gives a 0.0625 mm
+ * object-space pixel pitch across a 650 mm belt; 0.1 mm/line encoder
+ * step gives ~4 travel lines per 0.4 mm module (clears the default
+ * ppmMin 2.0); the 12 k lines/s ceiling saturates at 1.2 m/s, so 1.5 m/s
+ * intentionally undersamples (LOW_PPM by design).
  */
 export function defaultLineScanRig(
   id: string,
@@ -282,7 +283,8 @@ export function defaultLineScanRig(
     pose: { positionMm, quaternion },
     line: {
       pixelsPerLine: 8192,
-      sensorWidthMm: 512,
+      physicalSensorWidthMm: 40.96, // 8192 × 5 µm
+      fovWidthMm: 512, // legacy v3 object-space coverage, preserved
       encoderStepMmPerLine: 0.1,
       maxLineRateLinesPerSec: 12000,
       maxStripLengthMm: 5000,
@@ -650,7 +652,8 @@ export function validateCameraRigs(rigs: CameraConfig[]): ConfigError[] {
         errors.push({ path: p(k), message: 'is not allowed on LINE_SCAN rigs' });
       }
       num(r.line.pixelsPerLine, p('line.pixelsPerLine'), 64, 65536);
-      num(r.line.sensorWidthMm, p('line.sensorWidthMm'), 50, 2000);
+      num(r.line.physicalSensorWidthMm, p('line.physicalSensorWidthMm'), 5, 100);
+      num(r.line.fovWidthMm, p('line.fovWidthMm'), 50, 2000);
       num(r.line.encoderStepMmPerLine, p('line.encoderStepMmPerLine'), 0.01, 10);
       num(r.line.maxLineRateLinesPerSec, p('line.maxLineRateLinesPerSec'), 100, 100000);
       num(r.line.maxStripLengthMm, p('line.maxStripLengthMm'), 10, 20000);

@@ -174,8 +174,17 @@ export interface LineScanCameraConfig {
   line: {
     /** Pixels across the belt per acquired line. */
     pixelsPerLine: number;
-    /** Physical line-sensor width across the belt, mm. */
-    sensorWidthMm: number;
+    /**
+     * Physical line-sensor width, mm (config v4). For the report sensor
+     * 8192 × 5 µm = 40.96 mm. Never confused with object-space coverage:
+     * that is `fovWidthMm`.
+     */
+    physicalSensorWidthMm: number;
+    /**
+     * Object-space field of view across the belt at the scan plane, mm
+     * (config v4; was the ambiguous v3 `sensorWidthMm`).
+     */
+    fovWidthMm: number;
     /** Encoder travel per acquired line, mm. */
     encoderStepMmPerLine: number;
     /** Hardware ceiling: maximum lines per second. */
