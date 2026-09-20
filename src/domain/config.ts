@@ -8,6 +8,14 @@ import type { CameraConfig, MaterialPreset } from './types';
 
 export const CONFIG_VERSION = 2;
 
+/**
+ * Width of the GAP transfer's bottom opening, mm (AC-05 / issue #8).
+ * Under a GAP transfer the belt deck occludes the parcel's bottom face
+ * everywhere except this centred strip; SIDE_GRIP exposes the bottom face
+ * across the whole transfer zone [0, station.lengthMm].
+ */
+export const GAP_OPENING_MM = 100;
+
 export interface QualityThresholds {
   /** Hard gate: minimum full-label coverage fraction. */
   coverageMin: number;

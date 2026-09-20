@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import type { SimConfig } from '../domain/config';
+import { GAP_OPENING_MM } from '../domain/config';
 import { mmToM } from '../domain/units';
+
+// Re-exported so existing scene tests keep their import path.
+export { GAP_OPENING_MM };
 
 /**
  * Station geometry (issue #3). Pure THREE.Group builders so they run in
@@ -11,7 +15,6 @@ import { mmToM } from '../domain/units';
  */
 
 export const WORKING_DISTANCE_MM = 850;
-export const GAP_OPENING_MM = 100;
 export const RAIL_OFFSET_MM = 50; // rail centre offset beyond belt half-width
 export const RAIL_WIDTH_MM = 50;
 export const RAIL_HEIGHT_MM = 60;

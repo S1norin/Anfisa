@@ -8,7 +8,9 @@
  * never under-estimates its own silhouette.
  */
 
-import type { ParcelState } from '../domain/types';
+import type { Face, ParcelState } from '../domain/types';
+import type { SimConfig } from '../domain/config';
+import { GAP_OPENING_MM } from '../domain/config';
 import { degToRad } from '../domain/units';
 
 export type V3 = [number, number, number];
@@ -95,4 +97,24 @@ export function labelOccludedMm(
     if (t != null && t < dist - 1e-6) return true;
   }
   return false;
+}
+
+/**
+ * Station deck occlusion of the bottom face (AC-05 / issue #8).
+ * Mirrors `deckSegments` in scene/stationGeometry.ts:
+ *  - GAP: the deck blocks the bottom face except the centred
+ *    GAP_OPENING_MM strip at station.lengthMm / 2.
+ *  - SIDE_GRIP: the deck exists only outside the transfer zone [0, L].
+ */
+export function stationDeckOccludesBottom(
+  config: SimConfig,
+  face: Face,
+  labelZMm: number,
+): boolean {
+  if (face !== 'BOTTOM') return false;
+  const L = config.station.lengthMm;
+  if (config.station.bottomTransfer === 'GAP') {
+    return Math.abs(labelZMm - L / 2) > GAP_OPENING_MM / 2;
+  }
+  return labelZMm < 0 || labelZMm > L;
 }

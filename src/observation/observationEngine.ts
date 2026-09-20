@@ -27,7 +27,7 @@ import type {
 } from '../domain/types';
 import { defocusPx, parcelGlareIndex } from '../capture/imageFormation';
 import { labelMotionBlurPx } from './blur';
-import { labelOccludedMm } from './occlusion';
+import { labelOccludedMm, stationDeckOccludesBottom } from './occlusion';
 import { contrastProxy, evaluateQuality } from './quality';
 import type { ReasonInput } from './reasons';
 import { labelCenterWorldMm, projectLabelMm } from './projection';
@@ -85,7 +85,9 @@ export function observeLabels(
       const ppm = camZ > 0 ? (intr.fx / camZ) * config.barcode.xDimensionMm : 0;
       const blur = labelMotionBlurPx(rig, label, parcel, ctx.speedMmPerSec);
       const focus = camZ > 0 ? defocusPx(rig, camZ) : 0;
-      const occluded = labelOccludedMm(camPos, centre, parcel, allParcels);
+      const occluded =
+        labelOccludedMm(camPos, centre, parcel, allParcels) ||
+        stationDeckOccludesBottom(config, label.face, centre[2]);
 
       const input: ReasonInput = {
         inFov: proj.inFov,

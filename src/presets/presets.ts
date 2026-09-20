@@ -88,7 +88,7 @@ export const PRESETS: readonly PresetDef[] = [
     id: 'bottom-gap',
     name: 'Bottom gap transfer',
     description:
-      'Recommended 6-view with a GAP bottom transfer: the parcel bottom face stays exposed to the BOTTOM reader.',
+      'Recommended 6-view with a GAP bottom transfer: the belt deck occludes the bottom face except a 100 mm opening, so bottom labels are only captured while crossing the gap (AC-05).',
     category: 'RIG',
     build: (seed = DEFAULT_PRESET_SEED) => {
       const cfg = recommendedSixViewConfig();
@@ -101,7 +101,7 @@ export const PRESETS: readonly PresetDef[] = [
     id: 'side-grip',
     name: 'Side-grip transfer',
     description:
-      'Recommended 6-view with SIDE_GRIP transfer: side rails occlude part of the parcel bottom face at the transfer.',
+      'Recommended 6-view with SIDE_GRIP transfer: no deck under the transfer zone, so the BOTTOM reader sees the full bottom face (AC-05).',
     category: 'RIG',
     build: (seed = DEFAULT_PRESET_SEED) => {
       const cfg = recommendedSixViewConfig();
