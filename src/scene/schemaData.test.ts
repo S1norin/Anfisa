@@ -4,14 +4,21 @@
  * functions of (config, parcel, rig) — tested without WebGL.
  */
 
+import { reportSixViewConfig } from '../capture/presets';
 import { defaultCameraRigs } from '../domain/camera';
 import { defaultConfig } from '../domain/config';
-import type { AreaScanCameraConfig, CameraConfig, ParcelState } from '../domain/types';
+import type {
+  AreaScanCameraConfig,
+  CameraConfig,
+  LineScanCameraConfig,
+  ParcelState,
+} from '../domain/types';
 import {
   dimensionLines,
   focusPlaneCorners,
   incidenceArc,
   labelAnnotations,
+  lineScanAnnotations,
   opticalAxes,
   rigVFovDeg,
   roiCorners,
@@ -227,6 +234,72 @@ describe('angle arcs', () => {
     const p90 = makeParcel({ spec: { ...makeParcel().spec, yawDeg: 90 } });
     const b = yawArc(p90);
     expect(b.points[b.points.length - 1][0]).toBeCloseTo(centre[0] + 140, 6);
+  });
+});
+
+describe('line-scan annotations (t10)', () => {
+  function lineRig(role: 'TOP' | 'BOTTOM'): LineScanCameraConfig {
+    const cfg = reportSixViewConfig();
+    const rig = cfg.cameraRigs.find(
+      (r): r is LineScanCameraConfig => r.role === role && r.kind === 'LINE_SCAN',
+    );
+    if (!rig) throw new Error(`report layout has no ${role} line scanner`);
+    return rig;
+  }
+
+  it('annotates each enabled LINE_SCAN rig: plane at scanPlaneZMm + rig → plane axis', () => {
+    const cfg = reportSixViewConfig();
+    const anns = lineScanAnnotations(cfg.cameraRigs);
+    expect(anns).toHaveLength(2);
+    for (const a of anns) {
+      const rig = cfg.cameraRigs.find((r) => r.id === a.rigId)! as LineScanCameraConfig;
+      // The plane spans the sensor width.
+      const span = Math.hypot(
+        a.planeCorners[1][0] - a.planeCorners[0][0],
+        a.planeCorners[1][1] - a.planeCorners[0][1],
+        a.planeCorners[1][2] - a.planeCorners[0][2],
+      );
+      expect(span).toBeCloseTo(rig.line.sensorWidthMm, 6);
+      // The plane sits at the encoder-synced scanPlaneZMm (deck level
+      // y = 0), with at most the 2 mm slab half-thickness along travel.
+      for (const c of a.planeCorners) {
+        expect(Math.abs(c[2] - rig.line.scanPlaneZMm)).toBeLessThanOrEqual(2);
+        expect(c[1]).toBeCloseTo(0, 6);
+      }
+      // The axis runs from the rig to the plane centre.
+      expect(a.axis.from).toEqual(rig.pose.positionMm);
+      expect(a.axis.to[2]).toBeCloseTo(rig.line.scanPlaneZMm, 6);
+      // The label carries the new line fields.
+      expect(a.label).toContain(rig.id);
+      expect(a.sub).toContain(String(rig.line.sensorWidthMm));
+      expect(a.sub).toContain(String(rig.line.scanPlaneZMm));
+    }
+  });
+
+  it('area-only helpers stay area-only on a mixed rig list (no crash)', () => {
+    const cfg = reportSixViewConfig();
+    const areaIds = cfg.cameraRigs.filter((r) => r.kind === 'AREA_SCAN').map((r) => r.id);
+    expect(scanZones(cfg.cameraRigs).map((z) => z.rigId)).toEqual(areaIds);
+    expect(opticalAxes(cfg.cameraRigs)).toHaveLength(areaIds.length);
+  });
+
+  it('disabled line rigs get no annotation; a moved scan plane follows', () => {
+    const cfg = reportSixViewConfig();
+    const rigs = cfg.cameraRigs.map((r) =>
+      r.kind === 'LINE_SCAN' && r.role === 'TOP' ? { ...r, enabled: false } : r,
+    );
+    const anns = lineScanAnnotations(rigs);
+    expect(anns).toHaveLength(1);
+    expect(anns[0].rigId).toBe(lineRig('BOTTOM').id);
+
+    const moved = lineRig('BOTTOM');
+    const withMoved: CameraConfig = {
+      ...moved,
+      line: { ...moved.line, scanPlaneZMm: 300 },
+    };
+    const a = lineScanAnnotations([withMoved])[0];
+    expect(a.planeCorners.every((c) => Math.abs(c[2] - 300) <= 2)).toBe(true);
+    expect(a.sub).toContain('plane Z 300 mm');
   });
 });
 

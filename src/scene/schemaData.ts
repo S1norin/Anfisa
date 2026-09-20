@@ -20,7 +20,7 @@ import {
   parcelCentreWorldMm,
   projectLabelMm,
 } from '../observation/projection';
-import type { AreaScanCameraConfig, CameraConfig, ParcelState } from '../domain/types';
+import type { AreaScanCameraConfig, CameraConfig, LineScanCameraConfig, ParcelState } from '../domain/types';
 import type { SimConfig } from '../domain/config';
 import { getStationDimensions } from './stationGeometry';
 
@@ -228,6 +228,49 @@ function localAxes(q: Quat): { x: V3; y: V3; z: V3 } {
     y: quatRotate(q, [0, 1, 0]),
     z: quatRotate(q, [0, 0, 1]),
   };
+}
+
+/**
+ * Line-scan rig annotation (t10): the thin scan plane (sensor width × slab
+ * at the encoder-synced scanPlaneZMm, deck level y = 0) plus the optical
+ * axis from the rig to the plane centre, and the label text carrying the
+ * new line fields (sensor width, px/line, plane Z). Pure world-mm data;
+ * the R3F layer draws it.
+ */
+export interface LineScanAnnotation {
+  rigId: string;
+  /** e.g. "CAM-005 · TOP — line scan" */
+  label: string;
+  /** e.g. "512 mm sensor · 1024 px/line · plane Z 1100 mm" */
+  sub: string;
+  /** Scan plane corners (world mm): sensor-width span × thin slab. */
+  planeCorners: V3[];
+  /** Optical axis: rig position → scan plane centre. */
+  axis: { from: V3; to: V3 };
+}
+
+export function lineScanAnnotations(rigs: CameraConfig[]): LineScanAnnotation[] {
+  return rigs
+    .filter((r): r is LineScanCameraConfig => r.enabled && r.kind === 'LINE_SCAN')
+    .map((rig) => {
+      const p = rig.pose.positionMm;
+      const axes = localAxes(rig.pose.quaternion);
+      const halfW = rig.line.sensorWidthMm / 2;
+      const eps = 2; // slab half-thickness along the travel axis (mm)
+      const center: V3 = [p[0], 0, rig.line.scanPlaneZMm];
+      const corner = (sy: number, sx: number): V3 => [
+        center[0] + axes.y[0] * halfW * sy + axes.x[0] * eps * sx,
+        center[1] + axes.y[1] * halfW * sy + axes.x[1] * eps * sx,
+        center[2] + axes.y[2] * halfW * sy + axes.x[2] * eps * sx,
+      ];
+      return {
+        rigId: rig.id,
+        label: `${rig.id} · ${rig.role} — line scan`,
+        sub: `${rig.line.sensorWidthMm} mm sensor · ${rig.line.pixelsPerLine} px/line · plane Z ${rig.line.scanPlaneZMm} mm`,
+        planeCorners: [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)],
+        axis: { from: [...p] as V3, to: center },
+      };
+    });
 }
 
 /**

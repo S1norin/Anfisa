@@ -26,6 +26,7 @@ import {
   focusPlaneCorners,
   incidenceArc,
   labelAnnotations,
+  lineScanAnnotations,
   opticalAxes,
   roiCorners,
   scanZones,
@@ -465,6 +466,7 @@ export function SchemaScene({
   }, [dims, presetName]);
   const zones = useMemo(() => scanZones(config.cameraRigs), [config.cameraRigs]);
   const axes = useMemo(() => opticalAxes(config.cameraRigs), [config.cameraRigs]);
+  const lineAnns = useMemo(() => lineScanAnnotations(config.cameraRigs), [config.cameraRigs]);
   const labelGroups = useMemo(
     () => (parcel ? labelAnnotationGroups(config, parcel) : []),
     [config, parcel],
@@ -555,6 +557,30 @@ export function SchemaScene({
               quaternion={z.quaternion}
               label={z.label}
             />
+          ))}
+
+        {/* Line scanners: thin scan plane at the encoder-synced Z + optical axis (t10). */}
+        {toggles.scanZones &&
+          lineAnns.map((a) => (
+            <group key={a.rigId}>
+              <FocusPlaneRect corners={a.planeCorners} color="#ffb84f" />
+              <Line
+                points={[toM(a.axis.from), toM(a.axis.to)]}
+                color="#ffb84f"
+                lineWidth={1.2}
+                dashed
+                dashSize={0.05}
+                gapSize={0.03}
+                transparent
+                opacity={0.8}
+              />
+              <TextSprite
+                position={toM(a.axis.to)}
+                text={a.label}
+                sub={a.sub}
+                height={0.085}
+              />
+            </group>
           ))}
 
         {toggles.focusPlanes &&

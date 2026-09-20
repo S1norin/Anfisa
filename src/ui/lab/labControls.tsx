@@ -33,6 +33,7 @@ import type {
   AreaScanCameraConfig,
   CameraConfig,
   CameraState,
+  LineScanCameraConfig,
   ParcelState,
 } from '../../domain/types';
 
@@ -103,6 +104,15 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function Readout({ label, value }: { label: string; value: string }) {
+  return (
+    <label className="cam-field cam-readout">
+      <span>{label}</span>
+      <span data-testid={label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '')}>{value}</span>
+    </label>
+  );
+}
+
 export function LabControls({
   config,
   states,
@@ -152,6 +162,24 @@ export function LabControls({
       rigs.map((r) => (r.id === rig.id ? (fn(r as AreaScanCameraConfig) as CameraConfig) : r)),
     );
   };
+
+  /** Line-rig-only patches (line sensor + encoder sync). */
+  const patchLine = (fn: (r: LineScanCameraConfig) => LineScanCameraConfig) => {
+    if (!rig || rig.kind !== 'LINE_SCAN') return;
+    applyRigs(
+      rigs.map((r) => (r.id === rig.id ? (fn(r as LineScanCameraConfig) as CameraConfig) : r)),
+    );
+  };
+
+  /** Derived line-scan readouts (mm/s line rate, mm/line pitch, …). */
+  const line = rig?.kind === 'LINE_SCAN' ? rig.line : null;
+  const linePitchMm = line ? line.sensorWidthMm / line.pixelsPerLine : 0;
+  // The scan plane sits at deck level (y = 0); for the TOP/BOTTOM presets
+  // the rig's y offset is exactly the working distance.
+  const workingDistanceMm = rig && line ? Math.abs(rig.pose.positionMm[1]) : 0;
+  const requiredLineRate = line ? config.belt.speedMmPerSec / line.encoderStepMmPerLine : 0;
+  const rateMargin = line && requiredLineRate > 0 ? line.maxLineRateLinesPerSec / requiredLineRate : 0;
+  const linesAcrossLabel = linePitchMm > 0 ? 25 / linePitchMm : 0;
 
   /** Look target at the (stable) slant distance to the selected parcel. */
   const targetDist = parcel
@@ -607,10 +635,90 @@ export function LabControls({
           </Section>
             </>
           ) : (
-            <p className="cam-section">
-              Line-scan rig — line fields (sensor width, encoder step, scan
-              plane, line rate) are editable in t10.
-            </p>
+            <div data-testid="lab-line-fields">
+              <Section title="Line sensor">
+                <Field
+                  label="Sensor width mm"
+                  value={rig.line.sensorWidthMm}
+                  step={16}
+                  onValue={(n) =>
+                    patchLine((r) => ({
+                      ...r,
+                      line: { ...r.line, sensorWidthMm: n },
+                    }))
+                  }
+                />
+                <Field
+                  label="Pixels/line"
+                  value={rig.line.pixelsPerLine}
+                  step={256}
+                  onValue={(n) =>
+                    patchLine((r) => ({
+                      ...r,
+                      line: { ...r.line, pixelsPerLine: n },
+                    }))
+                  }
+                />
+                <Readout label="Line pitch mm" value={linePitchMm.toFixed(4)} />
+                <Readout
+                  label="Working distance mm"
+                  value={Math.round(workingDistanceMm).toString()}
+                />
+              </Section>
+
+              <Section title="Encoder sync">
+                <Field
+                  label="Encoder step mm/line"
+                  value={rig.line.encoderStepMmPerLine}
+                  step={0.01}
+                  onValue={(n) =>
+                    patchLine((r) => ({
+                      ...r,
+                      line: { ...r.line, encoderStepMmPerLine: n },
+                    }))
+                  }
+                />
+                <Field
+                  label="Max line rate (lines/s)"
+                  value={rig.line.maxLineRateLinesPerSec}
+                  step={1000}
+                  onValue={(n) =>
+                    patchLine((r) => ({
+                      ...r,
+                      line: { ...r.line, maxLineRateLinesPerSec: n },
+                    }))
+                  }
+                />
+                <Field
+                  label="Scan plane Z mm"
+                  value={rig.line.scanPlaneZMm}
+                  step={10}
+                  onValue={(n) =>
+                    patchLine((r) => ({
+                      ...r,
+                      line: { ...r.line, scanPlaneZMm: n },
+                    }))
+                  }
+                />
+                <Readout
+                  label="Required line rate (lines/s)"
+                  value={Math.round(requiredLineRate).toString()}
+                />
+                <Readout
+                  label="Line-rate margin ×"
+                  value={rateMargin > 0 ? rateMargin.toFixed(2) : '—'}
+                />
+                <Readout
+                  label="Lines across 25 mm label"
+                  value={Math.round(linesAcrossLabel).toString()}
+                />
+              </Section>
+
+              <Readout
+                label="Travel / scan axes"
+                value="belt +Z · sensor across belt width (X)"
+              />
+            </div>
           )}
 
           <Section title="Preview">

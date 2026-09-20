@@ -6,10 +6,18 @@
 import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
-import { recommendedSixViewConfig } from '../../capture/presets';
+import { recommendedSixViewConfig, reportSixViewConfig } from '../../capture/presets';
 import type { SimConfig } from '../../domain/config';
-import type { AreaScanCameraConfig } from '../../domain/types';
+import type { AreaScanCameraConfig, LineScanCameraConfig } from '../../domain/types';
 import { LabControls } from './labControls';
+
+/** The report layout is the six-view with TOP/BOTTOM line scanners (t2). */
+function lineRigId(): { cfg: ReturnType<typeof reportSixViewConfig>; id: string } {
+  const cfg = reportSixViewConfig();
+  const rig = cfg.cameraRigs.find((r) => r.kind === 'LINE_SCAN');
+  if (!rig) throw new Error('report layout has no line scanner');
+  return { cfg, id: rig.id };
+}
 
 interface LabTestMocks {
   onSelectCamera: Mock;
@@ -147,6 +155,52 @@ describe('LabControls', () => {
     expect(props.onExportObservations).toHaveBeenCalledTimes(1);
     fireEvent.click(row.getByTestId('lab-export-metrics-csv'));
     expect(props.onExportMetricsCsv).toHaveBeenCalledTimes(1);
+  });
+
+  it('selecting a LINE_SCAN rig shows line fields and hides area-only sections (t10)', () => {
+    const { cfg, id } = lineRigId();
+    renderControls({ config: cfg, selectedCameraId: id });
+    const edit = within(screen.getByTestId('lab-edit'));
+    expect(edit.getByTestId('lab-line-fields')).toBeTruthy();
+    expect(edit.getByLabelText('Sensor width mm')).toBeTruthy();
+    expect(edit.getByLabelText('Pixels/line')).toBeTruthy();
+    expect(edit.getByLabelText('Encoder step mm/line')).toBeTruthy();
+    expect(edit.getByLabelText('Max line rate (lines/s)')).toBeTruthy();
+    expect(edit.getByLabelText('Scan plane Z mm')).toBeTruthy();
+    // Derived readouts present (by value data-testid).
+    expect(edit.getByTestId('required-line-rate-lines-s')).toBeTruthy();
+    expect(edit.getByTestId('working-distance-mm')).toBeTruthy();
+    expect(edit.getByTestId('line-pitch-mm')).toBeTruthy();
+    // Area-only fields are hidden for line rigs.
+    expect(edit.queryByLabelText('Focal mm')).toBeNull();
+    expect(edit.queryByLabelText('FPS')).toBeNull();
+    expect(edit.queryByLabelText('Exposure µs')).toBeNull();
+  });
+
+  it('a line-field edit commits through the live config; siblings untouched (t10)', () => {
+    const { cfg, id } = lineRigId();
+    const props = renderControls({ config: cfg, selectedCameraId: id });
+    const width = within(screen.getByTestId('lab-edit')).getByLabelText('Sensor width mm');
+    fireEvent.change(width, { target: { value: '480' } });
+    expect(props.onCommit).toHaveBeenCalledTimes(1);
+    const mutator = props.onCommit.mock.calls[0][0] as (c: SimConfig) => SimConfig;
+    const next = mutator(cfg);
+    const rig = next.cameraRigs.find((r) => r.id === id)! as LineScanCameraConfig;
+    expect(rig.line.sensorWidthMm).toBe(480);
+    // A sibling rig is unchanged.
+    const other = next.cameraRigs.find((r) => r.id !== id)!;
+    expect(other).toEqual(cfg.cameraRigs.find((r) => r.id !== id));
+    expect(screen.queryByTestId('lab-edit-error')).toBeNull();
+  });
+
+  it('an invalid line value never commits and shows the validation error (t10)', () => {
+    const { cfg, id } = lineRigId();
+    const props = renderControls({ config: cfg, selectedCameraId: id });
+    const step = within(screen.getByTestId('lab-edit')).getByLabelText('Encoder step mm/line');
+    fireEvent.change(step, { target: { value: '0' } }); // step must be in [0.01, 10]
+    expect(props.onCommit).not.toHaveBeenCalled();
+    const err = screen.getByTestId('lab-edit-error');
+    expect(err.textContent).toContain('line.encoderStepMmPerLine');
   });
 
   it('rejected import shows the validation error; accepted import clears it', async () => {
