@@ -14,12 +14,14 @@ import { feedCaptureEvent } from '../pipeline/feedCapture';
 import { ParcelPipeline } from '../pipeline/pipeline';
 import type { ParcelAggregate } from '../pipeline/aggregation';
 import { Simulation } from '../simulation/sim';
+import { FIXED_STEP_MS } from '../simulation/state';
 
 /**
  * Versioned simulation store (store/ — §9 architecture).
  *
- * The domain simulation runs OUTSIDE React: `sim.pump()` is called from the
- * render loop, then a version tick lets React re-read `sim.state` via
+ * The domain simulation runs OUTSIDE React: `tick()` is called from the
+ * render loop, interleaves sim step and pipeline work per domain step,
+ * then a version tick lets React re-read `sim.state` via
  * `useSyncExternalStore`. React never drives the domain clock per-frame.
  */
 
@@ -143,17 +145,29 @@ export class SimStore {
    * nothing is pure waste).
    */
   tick(realElapsedMs: number): void {
-    const before = this.sim.state.simTimeMs;
-    this.sim.pump(realElapsedMs);
-    this.processNewEvents();
-    if (this.sim.state.simTimeMs !== before) this.notify();
+    const s = this.sim.state;
+    if (s.status !== 'RUNNING') return;
+    const before = s.simTimeMs;
+    // Interleave sim and pipeline per domain step (same step count as
+    // sim.pump would take), so captures are decoded at their own step's
+    // parcel positions and finalize/ACK fire at exact step times: the
+    // live run matches the headless driver byte-for-byte at ANY display
+    // refresh rate (AC-08, NFR-006).
+    const ideal = (realElapsedMs * s.speedFactor) / FIXED_STEP_MS;
+    const steps = Math.min(Math.floor(ideal), 100); // cap: avoid death spirals
+    for (let i = 0; i < steps; i++) {
+      this.sim.step();
+      this.processNewEvents();
+    }
+    if (s.simTimeMs !== before) this.notify();
   }
 
   /**
-   * Feed every capture scheduled since the last tick through the live
-   * pipeline, then advance finalize/ACK. Pure over domain steps: the
-   * result of N steps is independent of how ticks were chunked
-   * (association windows absorb the ≤ tick drift; NFR-006).
+   * Feed every capture scheduled since the last call through the live
+   * pipeline, then advance finalize/ACK at the current sim time. Called
+   * once per domain step by tick(), so every capture is decoded at its
+   * own step's parcel positions and finalize/ACK timestamps are
+   * step-exact (byte-identical to the headless driver; NFR-006).
    */
   private processNewEvents(): void {
     const s = this.sim.state;
@@ -187,11 +201,7 @@ export class SimStore {
       }
     }
 
-    this.pipelineInstance.finalizeDue(
-      s.simTimeMs,
-      s.config,
-      s.parcels.values(),
-    );
+    this.pipelineInstance.finalizeDue(s.simTimeMs, s.config, s.parcels.values());
     this.pipelineInstance.ackDue(s.simTimeMs, s.config.ackLatencyMs);
   }
 

@@ -117,13 +117,16 @@ export class Simulation {
 
   /**
    * Display-rate pump: convert real elapsed ms into a bounded number of
-   * domain steps using the speed factor. The ONLY display-coupled entry point.
+   * domain steps using the speed factor. The ONLY display-coupled entry
+   * point. Returns how many steps were executed (0 when not RUNNING) so
+   * callers can replay per-step pipeline work at exact step times.
    */
-  pump(realElapsedMs: number): void {
-    if (this.state.status !== 'RUNNING') return;
+  pump(realElapsedMs: number): number {
+    if (this.state.status !== 'RUNNING') return 0;
     const ideal = (realElapsedMs * this.state.speedFactor) / FIXED_STEP_MS;
     const steps = Math.min(Math.floor(ideal), 100); // cap: avoid death spirals
     this.stepMany(steps);
+    return steps;
   }
 
   /** Photoeye entry/exit + sort-point crossings, robust at any step size. */
