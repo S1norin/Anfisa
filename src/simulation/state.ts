@@ -3,6 +3,7 @@ import { defaultConfig } from '../domain/config';
 import { syncCameraStates } from '../domain/camera';
 import { createIdGenerator, createRng, type Rng } from '../domain/rng';
 import type { CameraState, FinalizedParcel, ParcelState, SimEvent } from '../domain/types';
+import type { LineScanSession } from '../capture/lineScanner';
 import { buildParcelSpec } from './spawner';
 
 /**
@@ -43,6 +44,8 @@ export interface SimState {
   cameraStates: Record<string, CameraState>;
   /** Last capture sim time per camera (CAM-005 fps scheduling). */
   captureLastMs: Record<string, number>;
+  /** Open line-scan sessions per line-rig id (t4, LINE_SCAN_* events). */
+  lineScanSessions: Map<string, LineScanSession>;
   /** Display-rate speed factor (0.25/0.5/1/2) — presentation only. */
   speedFactor: 0.25 | 0.5 | 1 | 2;
   /** Sim time of the next spawn (robust to any interval/step combination). */
@@ -69,6 +72,7 @@ export function createSimState(config: SimConfig = defaultConfig()): SimState {
     payloadHistory: [],
     cameraStates: syncCameraStates(config.cameraRigs, {}),
     captureLastMs: {},
+    lineScanSessions: new Map(),
     speedFactor: 1,
     nextSpawnMs: config.parcel.spawnIntervalMs,
   };

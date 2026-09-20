@@ -322,6 +322,39 @@ export type SimEvent =
       candidateParcelIds: string[];
     }
   | {
+      type: 'LINE_SCAN_STARTED';
+      cameraId: string;
+      parcelId: string;
+      simTimeMs: number;
+      encoderStartMm: number;
+    }
+  | {
+      type: 'LINE_SCAN_COMPLETED';
+      cameraId: string;
+      parcelId: string;
+      simTimeMs: number;
+      encoderStartMm: number;
+      encoderEndMm: number;
+      lineCount: number;
+      expectedLineCount: number;
+      durationMs: number;
+      /** Always true here; false trips emit LINE_SCAN_ABORTED. */
+      complete: boolean;
+    }
+  | {
+      type: 'LINE_SCAN_ABORTED';
+      cameraId: string;
+      parcelId: string;
+      simTimeMs: number;
+      encoderStartMm: number;
+      encoderEndMm: number;
+      lineCount: number;
+      durationMs: number;
+      /** Always false here. */
+      complete: boolean;
+      reason: 'CAMERA_FAULT' | 'CLOSE_SPACING' | 'MAX_STRIP';
+    }
+  | {
       type: 'PARCEL_FINALIZED';
       parcelId: string;
       simTimeMs: number;

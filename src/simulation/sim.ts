@@ -1,3 +1,5 @@
+import { advanceLineScans } from '../capture/lineScanner';
+import { isLineScan } from '../domain/camera';
 import { scheduleCaptures } from '../capture/scheduler';
 import type { SimConfig } from '../domain/config';
 import type { ParcelState } from '../domain/types';
@@ -78,9 +80,29 @@ export class Simulation {
     s.simTimeMs += dtMs;
 
     // 2. Parcels follow the encoder delta (speed-change robust).
+    const prevFronts = new Map<string, number>();
     for (const parcel of s.parcels.values()) {
+      prevFronts.set(parcel.parcelId, parcel.frontZMm);
       parcel.frontZMm += dEncoder;
       this.crossings(parcel);
+    }
+
+    // 2b. Encoder-synced line-scan sessions (t4): bounded LINE_SCAN_*
+    //     events, lines accumulated from encoder displacement only.
+    const lineRigs = s.config.cameraRigs.filter(isLineScan);
+    if (lineRigs.length > 0 && s.parcels.size > 0) {
+      const out = advanceLineScans({
+        rigs: lineRigs,
+        sessions: s.lineScanSessions,
+        parcels: [...s.parcels.values()].map((p) => ({
+          parcel: p,
+          prevFrontZMm: prevFronts.get(p.parcelId)!,
+        })),
+        encoderMm: s.encoderMm,
+        simTimeMs: s.simTimeMs,
+        cameraStates: s.cameraStates,
+      });
+      for (const ev of out.events) s.events.push(ev);
     }
 
     // 3. Deterministic spawning: front-to-front interval (PAR-001).
