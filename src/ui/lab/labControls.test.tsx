@@ -17,6 +17,8 @@ interface LabTestMocks {
   onStep: Mock;
   onCommit: Mock;
   onFault: Mock;
+  onApplyPreset: Mock;
+  onFaultScenario: Mock;
 }
 
 function renderControls(
@@ -29,6 +31,8 @@ function renderControls(
     onStep: vi.fn(),
     onCommit: vi.fn(),
     onFault: vi.fn(),
+    onApplyPreset: vi.fn(),
+    onFaultScenario: vi.fn(),
   };
   const props: Parameters<typeof LabControls>[0] = {
     config: recommendedSixViewConfig(),
@@ -99,5 +103,26 @@ describe('LabControls', () => {
     expect(props.onToggleFreeze).toHaveBeenCalledTimes(1);
     const step = screen.getByTestId('lab-step') as HTMLButtonElement;
     expect(step.disabled).toBe(false);
+  });
+
+  it('preset select offers all eight presets and applies by id (CFG-002)', () => {
+    const cfg = recommendedSixViewConfig();
+    const props = renderControls({ config: cfg, selectedCameraId: cfg.cameraRigs[0].id });
+    const select = screen.getByTestId('lab-preset') as HTMLSelectElement;
+    // 1 placeholder + 8 presets.
+    expect(select.options.length).toBe(9);
+    fireEvent.change(select, { target: { value: 'glare-stress' } });
+    expect(props.onApplyPreset).toHaveBeenCalledWith('glare-stress');
+  });
+
+  it('fault scenario buttons apply live scenarios by id', () => {
+    const cfg = recommendedSixViewConfig();
+    const props = renderControls({ config: cfg, selectedCameraId: cfg.cameraRigs[0].id });
+    fireEvent.click(screen.getByTestId('lab-fault-rolling-shutter'));
+    expect(props.onFaultScenario).toHaveBeenCalledWith('rolling-shutter');
+    fireEvent.click(screen.getByTestId('lab-fault-speed-change'));
+    expect(props.onFaultScenario).toHaveBeenCalledWith('speed-change');
+    fireEvent.click(screen.getByTestId('lab-fault-camera-fault'));
+    expect(props.onFaultScenario).toHaveBeenCalledWith('camera-fault');
   });
 });

@@ -11,6 +11,7 @@
 import { useMemo, useState } from 'react';
 import { simStore, useSim } from '../../store/simStore';
 import { SceneCanvas } from '../../scene/sceneCanvas';
+import { applyPresetToStore, getFaultScenario } from '../../presets';
 import { computeLabReport } from '../lab/labReport';
 import { LabControls } from '../lab/labControls';
 import { LabReportView } from '../lab/labReportView';
@@ -95,6 +96,12 @@ export function CameraLabView() {
             onStep={() => simStore.stepOnce()}
             onCommit={(mutator) => simStore.updateConfig(mutator)}
             onFault={(id, faulted) => simStore.setCameraFault(id, faulted)}
+            onApplyPreset={(id) => {
+              // Reset clears the run; clear the parcel selection too.
+              setSelectedParcelId(null);
+              applyPresetToStore(simStore, id);
+            }}
+            onFaultScenario={(id) => getFaultScenario(id)?.apply(simStore)}
           />
         </div>
       </div>

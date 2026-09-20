@@ -37,7 +37,7 @@ const SIDE_WORKING_DISTANCE_MM = 929;
 /** Top/bottom working distance (mm, face plane to eye). */
 const TOP_WORKING_DISTANCE_MM = 900;
 
-function aim(
+export function aim(
   rig: CameraConfig,
   eye: V3,
   target: V3,

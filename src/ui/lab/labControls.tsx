@@ -25,6 +25,10 @@ import {
   type Quat,
 } from '../../domain/camera';
 import type { SimConfig } from '../../domain/config';
+import {
+  FAULT_SCENARIOS,
+  PRESETS,
+} from '../../presets';
 import type {
   CameraConfig,
   CameraState,
@@ -46,6 +50,10 @@ interface LabControlsProps {
   onCommit: (mutator: (cfg: SimConfig) => SimConfig) => void;
   /** Fault raise/clear (CAM-009 state machine, not a config field). */
   onFault: (id: string, faulted: boolean) => void;
+  /** Apply a named preset: resets the run with the preset config (CFG-004). */
+  onApplyPreset: (id: string) => void;
+  /** Apply a live fault scenario (no reset). */
+  onFaultScenario: (id: string) => void;
 }
 
 function Field({
@@ -97,6 +105,8 @@ export function LabControls({
   onStep,
   onCommit,
   onFault,
+  onApplyPreset,
+  onFaultScenario,
 }: LabControlsProps) {
   const [error, setError] = useState<string | null>(null);
   const rigs = config.cameraRigs;
@@ -174,6 +184,39 @@ export function LabControls({
         <button type="button" data-testid="lab-step" onClick={onStep} disabled={!frozen}>
           Step 50 ms
         </button>
+      </div>
+
+      <div className="lab-row" data-testid="lab-preset-row">
+        <label className="cam-field">
+          <span>Preset (resets run)</span>
+          <select
+            data-testid="lab-preset"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) onApplyPreset(e.target.value);
+            }}
+          >
+            <option value="">— apply —</option>
+            {PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="lab-faults">
+          {FAULT_SCENARIOS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              data-testid={`lab-fault-${f.id}`}
+              title={f.description}
+              onClick={() => onFaultScenario(f.id)}
+            >
+              {f.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {rig && (
