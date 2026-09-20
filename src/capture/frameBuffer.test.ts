@@ -1,5 +1,27 @@
-import { FrameBuffer } from './frameBuffer';
+import { FrameBuffer, StripBufferPool, type StripPixels } from './frameBuffer';
 import type { FrameObservation } from '../domain/types';
+import { reportSixViewConfig } from './presets';
+import { ProcessRun } from '../pipeline/runDriver';
+import { buildStripTexture } from './stripPreview';
+import { expectedLineCount } from './lineScanGeometry';
+
+function makeStrip(i: number, cameraId = 'CAM-005'): StripPixels {
+  const data = new Uint8ClampedArray(4 * 2 * 4);
+  return {
+    cameraId,
+    parcelId: `P-${i}`,
+    simTimeMs: i * 5,
+    widthPx: 4,
+    heightPx: 2,
+    data,
+    missingLineRows: [],
+    lineCount: 2,
+    expectedLineCount: 2,
+    complete: true,
+    encoderStartMm: i * 100,
+    encoderEndMm: i * 100 + 10,
+  };
+}
 
 function makeFrame(cameraId: string, simTimeMs: number): FrameObservation {
   return {
@@ -75,5 +97,71 @@ describe('FrameBuffer (CAM-007, NFR-005)', () => {
     fb.clear();
     expect(t.dispose).toHaveBeenCalled();
     expect(fb.cameraIds()).toEqual([]);
+  });
+});
+
+describe('StripBufferPool (t9, line-strip preview)', () => {
+  it('caps live buffers at maxBuffers for any number of strips', () => {
+    const pool = new StripBufferPool(16);
+    for (let i = 0; i < 200; i++) {
+      pool.push(makeStrip(i, i % 2 ? 'CAM-005' : 'CAM-006'));
+      expect(pool.allocated).toBeLessThanOrEqual(16);
+    }
+    expect(pool.allocated).toBe(16);
+    // Oldest dropped, newest kept — per camera (odd i → CAM-005).
+    expect(pool.latest('CAM-005')?.parcelId).toBe('P-199');
+    expect(pool.latest('CAM-006')?.parcelId).toBe('P-198');
+  });
+
+  it('a 50-parcel headless run never grows the pool past the cap', () => {
+    const run = new ProcessRun(reportSixViewConfig(), 50);
+    run.runToCompletion();
+
+    const s = run.sim.state;
+    const pool = new StripBufferPool(16);
+    let strips = 0;
+    for (const ev of s.events) {
+      if (ev.type !== 'LINE_SCAN_COMPLETED' && ev.type !== 'LINE_SCAN_ABORTED') {
+        continue;
+      }
+      const rig = s.config.cameraRigs.find((r) => r.id === ev.cameraId);
+      if (!rig || rig.kind !== 'LINE_SCAN') continue;
+      strips += 1;
+      pool.push(
+        buildStripTexture({
+          rig,
+          parcelId: ev.parcelId,
+          simTimeMs: ev.simTimeMs,
+          strip: {
+            encoderStartMm: ev.encoderStartMm,
+            encoderEndMm: ev.encoderEndMm,
+            lineCount: ev.lineCount,
+            expectedLineCount: expectedLineCount(
+              ev.encoderEndMm - ev.encoderStartMm,
+              rig.line.encoderStepMmPerLine,
+            ),
+            complete: ev.complete,
+            ...(ev.type === 'LINE_SCAN_ABORTED'
+              ? { abortReason: ev.reason }
+              : {}),
+          },
+          beltSpeedMmPerSec: s.speedMmPerSec,
+          seed: s.config.seed,
+        }),
+      );
+      expect(pool.allocated).toBeLessThanOrEqual(16);
+    }
+    // Enough strips to overflow a 16-buffer cap many times over.
+    expect(strips).toBeGreaterThan(16);
+    expect(pool.allocated).toBe(16);
+  });
+
+  it('clear() drops all live strips', () => {
+    const pool = new StripBufferPool(16);
+    pool.push(makeStrip(0));
+    pool.push(makeStrip(1));
+    pool.clear();
+    expect(pool.allocated).toBe(0);
+    expect(pool.latest('CAM-005')).toBeUndefined();
   });
 });

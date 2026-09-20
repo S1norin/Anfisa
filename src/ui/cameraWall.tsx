@@ -1,4 +1,5 @@
-import { frameBuffer } from '../capture/frameBuffer';
+import { useEffect, useRef } from 'react';
+import { frameBuffer, stripBufferPool } from '../capture/frameBuffer';
 import { simStore, useSim } from '../store/simStore';
 import type { CameraConfig, CameraState } from '../domain/types';
 
@@ -25,6 +26,24 @@ interface TileProps {
 
 function CameraTile({ rig, state, simTimeMs, decodedByFrame }: TileProps) {
   const latest = frameBuffer.latest(rig.id);
+  // Line scanners: the newest encoder-mapped strip reconstruction
+  // (t9, display-only — decode never reads these pixels, NFR-002).
+  const strip =
+    rig.kind === 'LINE_SCAN' ? stripBufferPool.latest(rig.id) : undefined;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !strip) return;
+    canvas.width = strip.widthPx;
+    canvas.height = strip.heightPx;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return; // jsdom: no 2D context (display-only path)
+    const img = ctx.createImageData(strip.widthPx, strip.heightPx);
+    img.data.set(strip.data);
+    ctx.putImageData(img, 0, 0);
+  }, [strip]);
+
   const ageMs = latest ? simTimeMs - latest.simTimeMs : null;
   const decoded = latest
     ? decodedByFrame.get(`${rig.id}@${latest.simTimeMs}`) ?? 0
@@ -77,6 +96,23 @@ function CameraTile({ rig, state, simTimeMs, decodedByFrame }: TileProps) {
           <dd data-testid={`cam-tile-decoded-${rig.id}`}>{decoded}</dd>
         </div>
       </dl>
+      {rig.kind === 'LINE_SCAN' && (
+        <div className="cam-tile-strip" data-testid={`cam-tile-strip-${rig.id}`}>
+          <canvas
+            ref={canvasRef}
+            className="cam-tile-strip-canvas"
+            data-testid={`cam-tile-strip-canvas-${rig.id}`}
+            width={strip?.widthPx ?? 1}
+            height={strip?.heightPx ?? 1}
+          />
+          <span
+            className="cam-tile-strip-label"
+            data-testid={`cam-tile-strip-label-${rig.id}`}
+          >
+            Line scanner reconstruction
+          </span>
+        </div>
+      )}
       {warnings.length > 0 && (
         <p className="cam-tile-warn" data-testid={`cam-tile-warn-${rig.id}`}>
           {warnings.join(' · ')}

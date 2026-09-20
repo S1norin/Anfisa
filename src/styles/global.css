@@ -607,6 +607,26 @@ body {
   font-family: ui-monospace, monospace;
 }
 
+.cam-tile-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cam-tile-strip-canvas {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: #0b0b0d;
+}
+
+.cam-tile-strip-label {
+  font-size: 0.75em;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+
 .view-camera-lab {
   display: block;
   min-height: calc(100vh - 50px);

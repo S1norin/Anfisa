@@ -7,6 +7,9 @@ import { reportSixViewConfig } from '../capture/presets';
 import type { RunObservationMeta } from '../metrics/runRecord';
 import { computeRunMetrics, type RunMetrics } from '../metrics/metrics';
 import { feedAcquisition, feedCaptureEvent } from '../pipeline/feedCapture';
+import { stripBufferPool } from '../capture/frameBuffer';
+import { buildStripTexture } from '../capture/stripPreview';
+import { expectedLineCount } from '../capture/lineScanGeometry';
 import { ParcelPipeline } from '../pipeline/pipeline';
 import type { ParcelAggregate } from '../pipeline/aggregation';
 import { Simulation } from '../simulation/sim';
@@ -221,6 +224,32 @@ export class SimStore {
         this.observations.push(...out.observations);
         this.decodedObservations += out.observations.filter((o) => o.decoded).length;
         this.misassociations += out.stats.mismatches;
+        // Display-only strip preview (t9): the pool NEVER feeds decode
+        // (NFR-002) — decode above consumed the domain strip payload.
+        if (rig.kind === 'LINE_SCAN') {
+          stripBufferPool.push(
+            buildStripTexture({
+              rig,
+              parcelId: ev.parcelId,
+              simTimeMs: ev.simTimeMs,
+              strip: {
+                encoderStartMm: ev.encoderStartMm,
+                encoderEndMm: ev.encoderEndMm,
+                lineCount: ev.lineCount,
+                expectedLineCount: expectedLineCount(
+                  ev.encoderEndMm - ev.encoderStartMm,
+                  rig.line.encoderStepMmPerLine,
+                ),
+                complete: ev.complete,
+                ...(ev.type === 'LINE_SCAN_ABORTED'
+                  ? { abortReason: ev.reason }
+                  : {}),
+              },
+              beltSpeedMmPerSec: s.speedMmPerSec,
+              seed: s.config.seed,
+            }),
+          );
+        }
       }
     }
 
@@ -241,6 +270,7 @@ export class SimStore {
   reset(config?: SimConfig): void {
     this.sim.reset(config);
     this.pipelineInstance = new ParcelPipeline();
+    stripBufferPool.clear();
     this.observations = [];
     this.consumedEvents = 0;
     this.spawnedCount = 0;

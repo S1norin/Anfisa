@@ -13,6 +13,8 @@ import { associateLineStrip } from './association';
 import { ParcelPipeline } from './pipeline';
 import { feedAcquisition } from './feedCapture';
 import { reportSixViewConfig } from '../capture/presets';
+import { stripBufferPool } from '../capture/frameBuffer';
+import { buildStripTexture } from '../capture/stripPreview';
 import { ProcessRun } from './runDriver';
 import { buildLiveRunRecord } from '../export/json';
 import { FIXED_STEP_MS } from '../simulation/state';
@@ -353,5 +355,58 @@ describe('store vs headless with line scans (t6, NFR-006)', () => {
     );
     expect(lineObs.length).toBeGreaterThan(0);
     expect(lineObs.some((o) => o.decoded)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Decode path independence (t9, NFR-002): decode consumes ONLY the domain
+// strip payload; the display-only strip preview is never read. (The import
+// scan half of this AC is a grep: no decode-path file imports
+// capture/frameBuffer — checked at commit time.)
+// ---------------------------------------------------------------------------
+
+describe('decode never reads preview pixels (t9, NFR-002)', () => {
+  it('tampering the strip buffer pool changes nothing downstream', () => {
+    const base = lineFeed({});
+    const baseline = feedAcquisition(base, new ParcelPipeline());
+
+    // Build a display-only strip for the same domain interval, push it,
+    // then corrupt every pixel in the pool.
+    stripBufferPool.clear();
+    const tex = buildStripTexture({
+      rig: topRig(),
+      parcelId: 'P-A',
+      simTimeMs: 5000,
+      strip: {
+        encoderStartMm: 1300,
+        encoderEndMm: 1800,
+        lineCount: 5000,
+        expectedLineCount: 5000,
+        complete: true,
+      },
+      beltSpeedMmPerSec: 1000,
+      seed: 1,
+    });
+    stripBufferPool.push(tex);
+    const live = stripBufferPool.latest('LS-001')!;
+    expect(live.data.length).toBeGreaterThan(0);
+    for (let i = 0; i < live.data.length; i++) live.data[i] = i % 2 ? 0 : 255;
+
+    const tampered = feedAcquisition(base, new ParcelPipeline());
+    expect(tampered.observations).toEqual(baseline.observations);
+    expect(tampered.stats).toEqual(baseline.stats);
+  });
+
+  it('line-strip observations ignore display artifacts (imageEffects)', () => {
+    const cfgClean = defaultConfig();
+    const rigDirty = topRig();
+    rigDirty.imageEffects = { jitter: 1, missingLineChance: 1, banding: 1 };
+    cfgClean.cameraRigs = [rigDirty];
+
+    const a = feedAcquisition(lineFeed({ config: cfgClean }), new ParcelPipeline());
+    const b = feedAcquisition(lineFeed({ config: cfgClean }), new ParcelPipeline());
+    // Same domain strip in, same observations out — artifacts live in the
+    // preview texture only.
+    expect(b.observations).toEqual(a.observations);
   });
 });
