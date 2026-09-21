@@ -135,17 +135,25 @@ describe('HowItWorksView shell (t2-2)', () => {
     // The scanline (current row) tracks the same fraction on the strip.
     expect(screen.getByTestId('hiw-strip-scanline').style.top).toBe('50%');
 
-    // Step 2 end (t=15000, front=320): the strip is complete, scanline gone.
+    // Last in-step value (t=14990, front≈319.5): the strip is nearly complete.
+    setT(14990);
+    expect(rows()).toBe(557);
+    expect(screen.getByTestId('hiw-strip-rows')).toHaveTextContent('557 / 560 rows');
+    const scanTop = Number(
+      screen.getByTestId('hiw-strip-scanline').style.top.slice(0, -1),
+    );
+    expect(scanTop).toBeCloseTo(99.6, 0);
+
+    // Step 3 (t≥15000): the preparation stages replace the strip view.
     setT(15000);
+    expect(screen.getByTestId('stage-panel')).toBeTruthy();
+    expect(screen.queryByTestId('hiw-strip')).toBeNull();
+
+    // Step 4 (decode, same capture): the strip is complete, scanline gone.
+    setT(26000);
     expect(rows()).toBe(560);
     expect(markerLeft()).toBe('100%');
     expect(screen.queryByTestId('hiw-strip-scanline')).toBeNull();
-
-    // Steps 3-4 (same capture): the strip stays complete.
-    for (const t of [20000, 26000]) {
-      setT(t);
-      expect(rows()).toBe(560);
-    }
 
     // Area-camera steps keep the placeholder, not the strip.
     setT(37500);
@@ -184,9 +192,35 @@ describe('HowItWorksView shell (t2-2)', () => {
     expect(screen.getByTestId('hiw-strip-bottom-rows')).toHaveTextContent(
       '557 / 560 rows',
     );
-    // …and the capture completes at the step boundary (step 3 strip).
+    // …and at the step boundary the capture view is replaced by the
+    // preparation stages.
     setT(15000);
-    expect(screen.getByTestId('hiw-strip-rows')).toHaveTextContent('560 / 560 rows');
+    expect(screen.queryByTestId('step2-capture')).toBeNull();
+    expect(screen.getByTestId('stage-panel')).toBeTruthy();
+  });
+
+  it('step 3: all six preparation stages render as manifest images (t3-3)', () => {
+    render(<HowItWorksView />);
+    const scrub = screen.getByTestId('scrub') as HTMLInputElement;
+    const setT = (t: number) => {
+      fireEvent.change(scrub, { target: { value: t } });
+    };
+    setT(18750);
+    const panel = screen.getByTestId('stage-panel');
+    expect(panel).toHaveAttribute('data-capture-id', 'cap-ls-top-01');
+    for (const stage of [
+      'raw',
+      'maskedCrop',
+      'grayscaleContrast',
+      'edgeMap',
+      'candidateOverlay',
+      'rectifiedCrop',
+    ]) {
+      const tile = screen.getByTestId(`stage-tile-${stage}`);
+      expect(tile).toHaveAttribute('data-capture-id', 'cap-ls-top-01');
+      const img = tile.querySelector('img') as HTMLImageElement;
+      expect(img.src).toContain(`/hiw/assets/success/cap-ls-top-01/${stage}.png`);
+    }
   });
 
   it('mode switch: live shows the unavailable placeholder; guided stays usable', () => {

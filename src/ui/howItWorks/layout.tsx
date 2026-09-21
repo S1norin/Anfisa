@@ -48,6 +48,7 @@ import {
   bottomExposedZRange,
   lineScanHighlightAt,
 } from './step2Capture';
+import { Step3Prep } from './step3Prep';
 
 export type HiwMode = 'guided' | 'live';
 export type HiwViewPreset = 'orbit' | 'top' | 'side' | 'sensor';
@@ -288,6 +289,16 @@ function HiwImagePanel({
           Step 2 · line-scan capture
         </div>
         <Step2Capture manifest={manifest} timeMs={timeMs} />
+      </section>
+    );
+  }
+  if (step.step === 3) {
+    return (
+      <section className="hiw-image-panel" data-testid="hiw-image-panel">
+        <div className="hiw-image-step" data-testid="image-panel-step">
+          Step 3 · line-scan preparation
+        </div>
+        <Step3Prep manifest={manifest} timeMs={timeMs} />
       </section>
     );
   }

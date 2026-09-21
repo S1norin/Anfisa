@@ -103,6 +103,16 @@ export interface CaptureRecord {
   };
 }
 
+/** The six stages in display order (shared by line scans and area frames). */
+export const STAGE_ORDER: StageName[] = [
+  'raw',
+  'maskedCrop',
+  'grayscaleContrast',
+  'edgeMap',
+  'candidateOverlay',
+  'rectifiedCrop',
+];
+
 export interface PoseKeyframe {
   /** Story time (ms). */
   tMs: number;
