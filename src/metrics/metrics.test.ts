@@ -273,6 +273,122 @@ describe('computeRunMetrics (MET-001..005, 007)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// MET-005: duplicateRate (observationsCollapsed / totalObservations)
+// ---------------------------------------------------------------------------
+
+describe('duplicateRate (MET-005)', () => {
+  const lr = (
+    id: string,
+    payload: string,
+    decoded: boolean,
+    observationCount: number,
+  ) => ({
+    labelInstanceId: id,
+    face: 'LEFT' as const,
+    payload,
+    decodedPayload: decoded ? payload : undefined,
+    decoded,
+    bestConfidence: decoded ? 1 : 0,
+    observationCount,
+    decodedCount: decoded ? observationCount : 0,
+    cameras: ['CAM-003'],
+    reasons: [] as string[],
+  });
+
+  it('empty run → 0, never NaN', () => {
+    const m = computeRunMetrics({ parcels: [], observations: [] });
+    expect(m.totalObservations).toBe(0);
+    expect(m.uniqueObservedInstances).toBe(0);
+    expect(m.observationsCollapsed).toBe(0);
+    expect(m.duplicateRate).toBe(0);
+    expect(Number.isNaN(m.duplicateRate)).toBe(false);
+  });
+
+  it('partial decode: redundant fraction over all observations', () => {
+    // L-1 observed 10× (decoded), L-2 observed 3× (never decoded).
+    const r = result('P-1', {
+      status: 'PARTIAL',
+      decodedLabels: 1,
+      payloads: ['KTY-11111111111111'],
+      labelResults: [lr('L-1', 'KTY-11111111111111', true, 10), lr('L-2', 'KTY-22222222222222', false, 3)],
+    });
+    const m = computeRunMetrics({
+      parcels: [{ parcel: parcel(), result: r, aggregate: undefined }],
+      observations: [],
+    });
+    expect(m.totalObservations).toBe(13);
+    expect(m.uniqueObservedInstances).toBe(2);
+    expect(m.observationsCollapsed).toBe(11);
+    expect(m.duplicateRate).toBeCloseTo(11 / 13);
+  });
+
+  it('duplicates: multiple observations of one instance', () => {
+    const r = result('P-1', {
+      decodedLabels: 1,
+      payloads: ['KTY-11111111111111'],
+      labelResults: [lr('L-1', 'KTY-11111111111111', true, 7)],
+    });
+    const m = computeRunMetrics({
+      parcels: [{ parcel: parcel(), result: r, aggregate: undefined }],
+      observations: [],
+    });
+    expect(m.totalObservations).toBe(7);
+    expect(m.uniqueObservedInstances).toBe(1);
+    expect(m.observationsCollapsed).toBe(6);
+    expect(m.duplicateRate).toBeCloseTo(6 / 7);
+  });
+
+  it('false decode (ghost): ghost observations count in the denominator', () => {
+    const r = result('P-1', {
+      decodedLabels: 2,
+      uniquePayloads: 2,
+      payloads: ['KTY-11111111111111', 'KTY-99999999999999'],
+      labelResults: [
+        lr('L-1', 'KTY-11111111111111', true, 2),
+        lr('GHOST-9', 'KTY-99999999999999', true, 5),
+      ],
+    });
+    const m = computeRunMetrics({
+      parcels: [{ parcel: parcel(), result: r, aggregate: undefined }],
+      observations: [],
+    });
+    expect(m.falseDecodes).toBe(1);
+    expect(m.totalObservations).toBe(7);
+    expect(m.uniqueObservedInstances).toBe(2);
+    expect(m.observationsCollapsed).toBe(5);
+    expect(m.duplicateRate).toBeCloseTo(5 / 7);
+  });
+
+  it('repeated payload on distinct instances: dedup keys on instance, not payload', () => {
+    const same = 'KTY-00000000000000';
+    const p = parcel({
+      spec: {
+        ...parcel().spec,
+        labels: [
+          { labelInstanceId: 'L-1', payload: same, face: 'LEFT', localOffsetMm: [0, 0], rotationDeg: 0, widthMm: 78, heightMm: 25, damage: 0 },
+          { labelInstanceId: 'L-2', payload: same, face: 'TOP', localOffsetMm: [0, 0], rotationDeg: 0, widthMm: 78, heightMm: 25, damage: 0 },
+        ],
+      },
+    });
+    const r = result('P-1', {
+      expectedLabels: 2,
+      uniquePayloads: 1,
+      payloads: [same],
+      labelResults: [lr('L-1', same, true, 3), lr('L-2', same, true, 3)],
+    });
+    const m = computeRunMetrics({
+      parcels: [{ parcel: p, result: r, aggregate: undefined }],
+      observations: [],
+    });
+    expect(m.correctDecodes).toBe(2);
+    expect(m.totalObservations).toBe(6);
+    expect(m.uniqueObservedInstances).toBe(2); // keyed by instance, not payload
+    expect(m.observationsCollapsed).toBe(4);
+    expect(m.duplicateRate).toBeCloseTo(4 / 6);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // run record (MET-008)
 // ---------------------------------------------------------------------------
 

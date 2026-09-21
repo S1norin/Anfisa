@@ -101,6 +101,7 @@ function zeroMetrics(): RunMetrics {
     totalObservations: 120,
     uniqueObservedInstances: 40,
     observationsCollapsed: 80,
+    duplicateRate: 80 / 120,
     latency: {
       captureToDecodeMs: { n: 3, p50: 0, p95: 0, p99: 0 },
       entryToResultMs: { n: 2, p50: 3700, p95: 3800, p99: 3800 },

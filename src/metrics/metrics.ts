@@ -96,6 +96,13 @@ export interface RunMetrics {
   uniqueObservedInstances: number;
   /** MET-005: observations collapsed by instance-level dedup. */
   observationsCollapsed: number;
+  /**
+   * MET-005: fraction of observations that were redundant. Numerator:
+   * `observationsCollapsed` (redundant observations of instances already
+   * seen). Denominator: `totalObservations` (all observations before
+   * dedup). 0 for an empty run (never NaN).
+   */
+  duplicateRate: number;
   /** MET-006. */
   latency: LatencySummary;
   /** MET-007. */
@@ -187,6 +194,7 @@ export function computeRunMetrics(input: RunMetricsInput): RunMetrics {
     totalObservations,
     uniqueObservedInstances,
     observationsCollapsed: totalObservations - uniqueObservedInstances,
+    duplicateRate: zeroRate(totalObservations - uniqueObservedInstances, totalObservations),
     latency: latencySummary({
       captureToDecodeMs: input.captureToDecodeSamplesMs ?? [],
       entryToResultMs: entryToResult,
