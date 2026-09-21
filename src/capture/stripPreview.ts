@@ -433,6 +433,28 @@ export interface CompositeHiwStrip {
 }
 
 /**
+ * Bare-kraft strip rows (bottom face — no label, no barcode): kraft
+ * background + the same deterministic noise field as the top strip.
+ * The story parcel's bottom face is unlabelled kraft (labels: TOP/FRONT
+ * only), so the bottom line scan sees exactly this.
+ */
+export function buildHiwKraftStripRows(seed = 42): HiwLineStrip {
+  const { widthPx, rows } = HIW_STRIP;
+  const gray = new Uint8ClampedArray(widthPx * rows);
+  const rand = mulberry32(seed);
+  for (let i = 0; i < gray.length; i++) {
+    gray[i] = KRAFT_GRAY + gaussianNoise(rand) * KRAFT_NOISE_SIGMA;
+  }
+  return {
+    widthPx,
+    rows,
+    gray,
+    labelRect: { x0: 0, x1: 0, y0: 0, y1: 0 },
+    barcode: { x0: 0, y0: 0, w: 0, h: 0 },
+  };
+}
+
+/**
  * Composite strip rows (encoder order) into an RGBA buffer. `visibleRows`
  * supports progressive display (t3-2): rows arrive as the encoder advances.
  */
@@ -440,14 +462,28 @@ export function compositeHiwStripRows(
   strip: HiwLineStrip,
   visibleRows?: number,
 ): CompositeHiwStrip {
-  const rowCount = Math.max(
+  return compositeHiwStripRange(strip, 0, visibleRows ?? strip.rows);
+}
+
+/**
+ * Composite a ROW RANGE of a strip (encoder order) into an RGBA buffer —
+ * the bottom strip (t3-2) shows only the rows where the optical gap
+ * exposes the underside.
+ */
+export function compositeHiwStripRange(
+  strip: HiwLineStrip,
+  fromRow: number,
+  rowCount: number,
+): CompositeHiwStrip {
+  const from = Math.max(0, Math.min(strip.rows, Math.floor(fromRow)));
+  const count = Math.max(
     0,
-    Math.min(strip.rows, Math.floor(visibleRows ?? strip.rows)),
+    Math.min(strip.rows - from, Math.floor(rowCount)),
   );
-  const rgba = new Uint8ClampedArray(strip.widthPx * rowCount * 4);
-  for (let y = 0; y < rowCount; y++) {
+  const rgba = new Uint8ClampedArray(strip.widthPx * count * 4);
+  for (let y = 0; y < count; y++) {
     for (let x = 0; x < strip.widthPx; x++) {
-      const g = strip.gray[y * strip.widthPx + x];
+      const g = strip.gray[(from + y) * strip.widthPx + x];
       const o = (y * strip.widthPx + x) * 4;
       rgba[o] = g;
       rgba[o + 1] = g;
@@ -455,5 +491,5 @@ export function compositeHiwStripRows(
       rgba[o + 3] = 255;
     }
   }
-  return { widthPx: strip.widthPx, rowCount, rgba };
+  return { widthPx: strip.widthPx, rowCount: count, rgba };
 }

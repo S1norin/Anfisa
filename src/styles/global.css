@@ -1651,6 +1651,52 @@ body {
   text-align: center;
 }
 
+/* ---- Step 2: line-scan capture view (t3-2) ---- */
+
+.step2-capture {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step2-current-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: #0d1117;
+  font-size: 0.82em;
+}
+
+.step2-current-row[data-active='true'] {
+  border-color: var(--accent);
+}
+
+.step2-current-row-label {
+  color: var(--text-dim);
+}
+
+.step2-current-row-value {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.step2-strip-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.step2-strip-label {
+  color: var(--text-dim);
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* ---- Story timeline (bottom strip) ---- */
 
 .story-timeline {

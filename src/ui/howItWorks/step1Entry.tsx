@@ -12,6 +12,7 @@
 import type { ReplayManifest, PoseKeyframe } from './replayManifest';
 import { parcelFrontZAt } from './layout';
 import { stepIndexAt } from './playbackStore';
+import { lineScanHighlightAt } from './step2Capture';
 
 /** Entry photoeye plane (station entry), mm. */
 export const PHOTOEYE_Z_MM = 0;
@@ -25,17 +26,17 @@ export function hasCrossedPhotoeye(keyframes: KeyframeLike, tMs: number): boolea
 
 /**
  * Which scene highlight is active at story time t (drives the 3D panel).
- * Step 1 highlights the entry photoeye; no other step 1–8 highlights
- * exist in the shell (step-specific highlights land with each step).
+ * Step 1 highlights the entry photoeye; step 2 highlights the line-scan
+ * capture (scan planes glow while the box crosses, bottom gap revealed);
+ * later steps land their highlights with their content tasks.
  */
 export function sceneHighlightAt(
   manifest: ReplayManifest,
   tMs: number,
-): 'photoeye-entry' | null {
+): 'photoeye-entry' | 'line-scan' | null {
   const idx = stepIndexAt(manifest.steps, manifest.durationMs, tMs);
-  return manifest.steps[idx].sensorIds.includes('photoeye-entry')
-    ? 'photoeye-entry'
-    : null;
+  if (manifest.steps[idx].sensorIds.includes('photoeye-entry')) return 'photoeye-entry';
+  return lineScanHighlightAt(manifest, tMs) ? 'line-scan' : null;
 }
 
 /**

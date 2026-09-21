@@ -153,6 +153,42 @@ describe('HowItWorksView shell (t2-2)', () => {
     expect(screen.getByTestId('image-panel-capture')).toHaveTextContent('cap-cam-1-01');
   });
 
+  it('step 2: current 1D line + top/bottom 2D strips, bottom gap-clipped (t3-2)', () => {
+    render(<HowItWorksView />);
+    const scrub = screen.getByTestId('scrub') as HTMLInputElement;
+    const setT = (t: number) => {
+      fireEvent.change(scrub, { target: { value: t } });
+    };
+    setT(7500);
+    expect(screen.getByTestId('step2-capture')).toBeTruthy();
+    expect(screen.getByTestId('step2-current-row')).toHaveAttribute(
+      'data-active',
+      'false',
+    );
+    expect(screen.getByTestId('step2-top-strip-block')).toBeTruthy();
+    expect(screen.getByTestId('step2-bottom-strip-block')).toBeTruthy();
+    expect(screen.getByTestId('hiw-strip-bottom-rows')).toHaveTextContent(
+      '0 / 560 rows',
+    );
+    setT(13750);
+    expect(screen.getByTestId('step2-current-row')).toHaveAttribute(
+      'data-active',
+      'true',
+    );
+    expect(screen.getByTestId('step2-current-row-value')).toHaveTextContent('row 279');
+    expect(screen.getByTestId('hiw-strip-bottom-rows')).toHaveTextContent(
+      '280 / 560 rows',
+    );
+    // Last in-step scrub value: both strips nearly complete…
+    setT(14990);
+    expect(screen.getByTestId('hiw-strip-bottom-rows')).toHaveTextContent(
+      '557 / 560 rows',
+    );
+    // …and the capture completes at the step boundary (step 3 strip).
+    setT(15000);
+    expect(screen.getByTestId('hiw-strip-rows')).toHaveTextContent('560 / 560 rows');
+  });
+
   it('mode switch: live shows the unavailable placeholder; guided stays usable', () => {
     render(<HowItWorksView />);
     expect(screen.getByTestId('mode-guided')).toHaveAttribute(

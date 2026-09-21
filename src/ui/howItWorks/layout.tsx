@@ -42,6 +42,12 @@ import {
 } from './playbackStore';
 import { StoryTimeline } from './timeline';
 import { StripView, lineScanPayload } from './stripView';
+import {
+  Step2Capture,
+  LineScanCaptureHighlight,
+  bottomExposedZRange,
+  lineScanHighlightAt,
+} from './step2Capture';
 
 export type HiwMode = 'guided' | 'live';
 export type HiwViewPreset = 'orbit' | 'top' | 'side' | 'sensor';
@@ -182,7 +188,9 @@ function HiwScenePanel({
   view: HiwViewPreset;
 }) {
   const config = useMemo(() => defaultConfig(), []);
-  const photoeyeHighlight = sceneHighlightAt(manifest, timeMs) === 'photoeye-entry';
+  const highlight = sceneHighlightAt(manifest, timeMs);
+  const lineScanCapture =
+    highlight === 'line-scan' ? lineScanHighlightAt(manifest, timeMs) : null;
   const stepIdx = stepIndexAt(manifest.steps, manifest.durationMs, timeMs);
   const activeSensors = manifest.steps[stepIdx]?.sensorIds ?? [];
   const highlightId =
@@ -224,7 +232,18 @@ function HiwScenePanel({
         onSelect={() => undefined}
       />
       <ParcelScene state={parcel} />
-      {photoeyeHighlight && <PhotoeyeEntryHighlight beltWidthMm={config.belt.widthMm} />}
+      {highlight === 'photoeye-entry' && (
+        <PhotoeyeEntryHighlight beltWidthMm={config.belt.widthMm} />
+      )}
+      {lineScanCapture && (
+        <LineScanCaptureHighlight
+          beltWidthMm={config.belt.widthMm}
+          z0Mm={lineScanCapture.encoderSpanMm[0]}
+          z1Mm={lineScanCapture.encoderSpanMm[1]}
+          exposed={bottomExposedZRange(config)[1] > lineScanCapture.encoderSpanMm[0] &&
+            bottomExposedZRange(config)[0] < lineScanCapture.encoderSpanMm[1]}
+        />
+      )}
       {view === 'orbit' ? (
         <>
           <gridHelper args={[8, 40, '#2f3740', '#222831']} position={[0, -0.8, 1.1]} />
@@ -259,6 +278,16 @@ function HiwImagePanel({
           Step 1 · parcel entry
         </div>
         <Step1Entry manifest={manifest} timeMs={timeMs} />
+      </section>
+    );
+  }
+  if (step.step === 2) {
+    return (
+      <section className="hiw-image-panel" data-testid="hiw-image-panel">
+        <div className="hiw-image-step" data-testid="image-panel-step">
+          Step 2 · line-scan capture
+        </div>
+        <Step2Capture manifest={manifest} timeMs={timeMs} />
       </section>
     );
   }
