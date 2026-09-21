@@ -1551,6 +1551,91 @@ body {
   font-size: 0.85em;
 }
 
+/* ---- Line-scan strip view (t3-1) ---- */
+
+.hiw-strip {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 200px;
+}
+
+.hiw-strip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.85em;
+}
+
+.hiw-strip-title {
+  color: var(--text-dim);
+}
+
+.hiw-strip-rows {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.hiw-strip-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 160px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+.hiw-strip-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hiw-strip-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  pointer-events: none;
+}
+
+.hiw-strip-ruler {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78em;
+  color: var(--text-dim);
+}
+
+.hiw-strip-ruler-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+}
+
+.hiw-strip-ruler-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
+
+.hiw-strip-encoder-value {
+  min-width: 52px;
+  text-align: right;
+  color: var(--text);
+  font-weight: 600;
+}
+
 .hiw-live-unavailable {
   flex: 1;
   display: flex;

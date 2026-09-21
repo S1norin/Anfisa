@@ -41,6 +41,7 @@ import {
   type PlaybackStore,
 } from './playbackStore';
 import { StoryTimeline } from './timeline';
+import { StripView, lineScanPayload } from './stripView';
 
 export type HiwMode = 'guided' | 'live';
 export type HiwViewPreset = 'orbit' | 'top' | 'side' | 'sensor';
@@ -270,7 +271,13 @@ function HiwImagePanel({
         Step {step.step} ·{' '}
         {step.sensorIds.length > 0 ? step.sensorIds.join(', ') : 'parcel travel'}
       </div>
-      {capture ? (
+      {capture && capture.kind === 'LINE_SCAN' ? (
+        <StripView
+          capture={capture}
+          payload={lineScanPayload(manifest, capture)}
+          frontZMm={parcelFrontZAt(manifest.keyframes, timeMs)}
+        />
+      ) : capture ? (
         <div className="hiw-image-placeholder" data-testid="image-panel-placeholder">
           <div data-testid="image-panel-capture">{capture.captureId}</div>
           <div className="hiw-image-meta">

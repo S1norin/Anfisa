@@ -110,6 +110,49 @@ describe('HowItWorksView shell (t2-2)', () => {
     expect(screen.queryByTestId('image-panel-capture')).toBeNull();
   });
 
+  it('step 2: line-scan strip appends rows in encoder order with a synced ruler (t3-1)', () => {
+    render(<HowItWorksView />);
+    const scrub = screen.getByTestId('scrub') as HTMLInputElement;
+    const setT = (t: number) => {
+      fireEvent.change(scrub, { target: { value: t } });
+    };
+    const rows = (): number =>
+      Number(screen.getByTestId('hiw-strip-canvas').getAttribute('data-visible-rows'));
+    const markerLeft = (): string =>
+      screen.getByTestId('hiw-strip-ruler-marker').style.left;
+
+    // Step 2 start (t=7500, front=-40): the strip is shown, nothing acquired.
+    setT(7500);
+    expect(screen.getByTestId('hiw-strip')).toBeTruthy();
+    expect(rows()).toBe(0);
+    expect(markerLeft()).toBe('0%');
+
+    // Mid step 2 (t=13750, front=260): half the rows, marker at 50%.
+    setT(13750);
+    expect(rows()).toBe(280);
+    expect(markerLeft()).toBe('50%');
+    expect(screen.getByTestId('hiw-strip-rows')).toHaveTextContent('280 / 560 rows');
+    // The scanline (current row) tracks the same fraction on the strip.
+    expect(screen.getByTestId('hiw-strip-scanline').style.top).toBe('50%');
+
+    // Step 2 end (t=15000, front=320): the strip is complete, scanline gone.
+    setT(15000);
+    expect(rows()).toBe(560);
+    expect(markerLeft()).toBe('100%');
+    expect(screen.queryByTestId('hiw-strip-scanline')).toBeNull();
+
+    // Steps 3-4 (same capture): the strip stays complete.
+    for (const t of [20000, 26000]) {
+      setT(t);
+      expect(rows()).toBe(560);
+    }
+
+    // Area-camera steps keep the placeholder, not the strip.
+    setT(37500);
+    expect(screen.queryByTestId('hiw-strip')).toBeNull();
+    expect(screen.getByTestId('image-panel-capture')).toHaveTextContent('cap-cam-1-01');
+  });
+
   it('mode switch: live shows the unavailable placeholder; guided stays usable', () => {
     render(<HowItWorksView />);
     expect(screen.getByTestId('mode-guided')).toHaveAttribute(

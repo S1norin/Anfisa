@@ -174,3 +174,286 @@ export function buildStripTexture(input: StripPreviewInput): StripTexture {
     encoderEndMm: strip.encoderEndMm,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Guided-replay line-scan strip (t3-1) — faithful to the Python asset
+// generator (scripts/gen_hiw_assets.py: render_top_strip). The HIW strip
+// rows must correspond to the selected parcel face + label: flat kraft,
+// tape seams, white label, Code 128 B barcode (ISO 15417) along the
+// travel axis. Pure JS (no canvas API) so vitest can pixel-compare the
+// composite against the generated raw.png.
+// ---------------------------------------------------------------------------
+
+/** ISO 15417 Code 128 pattern table (107 values), verbatim from the generator. */
+const CODE128_PATTERNS: ReadonlyArray<readonly [number, number, number, number, number, number]> = [
+  [2, 1, 2, 2, 2, 2],
+  [2, 2, 2, 1, 2, 2],
+  [2, 2, 2, 2, 2, 1],
+  [1, 2, 1, 2, 2, 3],
+  [1, 2, 1, 3, 2, 2],
+  [1, 3, 1, 2, 2, 2],
+  [1, 2, 2, 2, 1, 3],
+  [1, 2, 2, 3, 1, 2],
+  [1, 3, 2, 2, 1, 2],
+  [2, 2, 1, 2, 1, 3],
+  [2, 2, 1, 3, 1, 2],
+  [2, 3, 1, 2, 1, 2],
+  [1, 1, 2, 2, 3, 2],
+  [1, 2, 2, 1, 3, 2],
+  [1, 2, 2, 2, 3, 1],
+  [1, 1, 3, 2, 2, 2],
+  [1, 2, 3, 1, 2, 2],
+  [1, 2, 3, 2, 2, 1],
+  [2, 2, 3, 2, 1, 1],
+  [2, 2, 1, 1, 3, 2],
+  [2, 2, 1, 2, 3, 1],
+  [2, 1, 3, 2, 1, 2],
+  [2, 2, 3, 1, 1, 2],
+  [3, 1, 2, 1, 3, 1],
+  [3, 1, 1, 2, 2, 2],
+  [3, 2, 1, 1, 2, 2],
+  [3, 2, 1, 2, 2, 1],
+  [3, 1, 2, 2, 1, 2],
+  [3, 2, 2, 1, 1, 2],
+  [3, 2, 2, 2, 1, 1],
+  [2, 1, 2, 1, 2, 3],
+  [2, 1, 2, 3, 2, 1],
+  [2, 3, 2, 1, 2, 1],
+  [1, 1, 1, 3, 2, 3],
+  [1, 3, 1, 1, 2, 3],
+  [1, 3, 1, 3, 2, 1],
+  [1, 1, 2, 3, 1, 3],
+  [1, 3, 2, 1, 1, 3],
+  [1, 3, 2, 3, 1, 1],
+  [2, 1, 1, 3, 1, 3],
+  [2, 3, 1, 1, 1, 3],
+  [2, 3, 1, 3, 1, 1],
+  [1, 1, 2, 1, 3, 3],
+  [1, 1, 2, 3, 3, 1],
+  [1, 3, 2, 1, 3, 1],
+  [1, 1, 3, 1, 2, 3],
+  [1, 1, 3, 3, 2, 1],
+  [1, 3, 3, 1, 2, 1],
+  [3, 1, 3, 1, 2, 1],
+  [2, 1, 1, 3, 3, 1],
+  [2, 3, 1, 1, 3, 1],
+  [2, 1, 3, 1, 1, 3],
+  [2, 1, 3, 3, 1, 1],
+  [2, 1, 3, 1, 3, 1],
+  [3, 1, 1, 1, 2, 3],
+  [3, 1, 1, 3, 2, 1],
+  [3, 3, 1, 1, 2, 1],
+  [3, 1, 2, 1, 1, 3],
+  [3, 1, 2, 3, 1, 1],
+  [3, 3, 2, 1, 1, 1],
+  [3, 1, 4, 1, 1, 1],
+  [2, 2, 1, 4, 1, 1],
+  [4, 3, 1, 1, 1, 1],
+  [1, 1, 1, 2, 2, 4],
+  [1, 1, 1, 4, 2, 2],
+  [1, 2, 1, 1, 2, 4],
+  [1, 2, 1, 4, 2, 1],
+  [1, 4, 1, 1, 2, 2],
+  [1, 4, 1, 2, 2, 1],
+  [1, 1, 2, 2, 1, 4],
+  [1, 1, 2, 4, 1, 2],
+  [1, 2, 2, 1, 1, 4],
+  [1, 2, 2, 4, 1, 1],
+  [1, 4, 2, 1, 1, 2],
+  [1, 4, 2, 2, 1, 1],
+  [2, 4, 1, 2, 1, 1],
+  [2, 2, 1, 1, 1, 4],
+  [4, 1, 3, 1, 1, 1],
+  [2, 4, 1, 1, 1, 2],
+  [1, 3, 4, 1, 1, 1],
+  [1, 1, 1, 2, 4, 2],
+  [1, 2, 1, 1, 4, 2],
+  [1, 2, 1, 2, 4, 1],
+  [1, 1, 4, 2, 1, 2],
+  [1, 2, 4, 1, 1, 2],
+  [1, 2, 4, 2, 1, 1],
+  [4, 1, 1, 2, 1, 2],
+  [4, 2, 1, 1, 1, 2],
+  [4, 2, 1, 2, 1, 1],
+  [2, 1, 2, 1, 4, 1],
+  [2, 1, 4, 1, 2, 1],
+  [4, 1, 2, 1, 2, 1],
+  [1, 1, 1, 1, 4, 3],
+  [1, 1, 1, 3, 4, 1],
+  [1, 3, 1, 1, 4, 1],
+  [1, 1, 4, 1, 1, 3],
+  [1, 1, 4, 3, 1, 1],
+  [4, 1, 1, 1, 1, 3],
+  [4, 1, 1, 3, 1, 1],
+  [1, 1, 3, 1, 4, 1],
+  [1, 1, 4, 1, 3, 1],
+  [3, 1, 1, 1, 4, 1],
+  [4, 1, 1, 1, 3, 1],
+  [2, 1, 1, 4, 1, 2],
+  [2, 1, 1, 2, 1, 4],
+  [2, 1, 1, 2, 3, 2],
+  [2, 3, 3, 1, 1, 1],
+];const CODE128_START_B = 104;
+const CODE128_STOP = [2, 3, 3, 1, 1, 1, 2] as const;
+
+/** Bar/space element widths for an ISO Code 128 B symbol. */
+export function code128Elements(payload: string): number[] {
+  const data = [...payload].map((c) => {
+    const v = c.charCodeAt(0) - 32;
+    if (v < 0 || v > 94) throw new Error(`Code 128 B: unsupported char '${c}'`);
+    return v;
+  });
+  const csum = (CODE128_START_B + data.reduce((a, b) => a + b, 0)) % 103;
+  const els: number[] = [];
+  for (const v of [CODE128_START_B, ...data, csum]) {
+    els.push(...CODE128_PATTERNS[v]);
+  }
+  els.push(...CODE128_STOP);
+  return els;
+}
+
+/**
+ * Strip geometry, mirrored from scripts/gen_hiw_assets.py
+ * (STRIP_W/STRIP_H, label rect, tape seams, barcode scale).
+ */
+export const HIW_STRIP = {
+  widthPx: 570,
+  rows: 560,
+  label: { x0: 85, x1: 485, y0: 70, y1: 470 },
+  tapeSeamY: [120, 440] as readonly number[],
+  barcodeModulePx: 2,
+  quietModules: 10,
+  barcodeRowsModules: 25,
+} as const;
+
+// Grayscale equivalents of the generator's BGR constants (BT.601 luma).
+const KRAFT_GRAY = Math.round(0.114 * 106 + 0.587 * 138 + 0.299 * 168); // 143
+const TAPE_GRAY = Math.round(0.114 * 88 + 0.587 * 108 + 0.299 * 128); // 112
+const LABEL_GRAY = 250;
+/** Combined sigma of the generator's two noise passes (luma-projected). */
+const KRAFT_NOISE_SIGMA = 1.65;
+
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gaussianNoise(rand: () => number): number {
+  const u = Math.max(rand(), 1e-12);
+  const v = rand();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+export interface HiwLineStrip {
+  widthPx: number;
+  rows: number;
+  /** Grayscale rows in encoder order (row 0 = start of travel). */
+  gray: Uint8ClampedArray;
+  labelRect: { x0: number; x1: number; y0: number; y1: number };
+  /** Barcode placement in strip pixels (after the generator's 90° rotation). */
+  barcode: { x0: number; y0: number; w: number; h: number };
+}
+
+/**
+ * Build the line-scan strip rows for a fixture payload, matching the
+ * generator's raw.png within noise tolerance. Deterministic in (payload, seed).
+ */
+export function buildHiwLineStripRows(
+  payload: string,
+  seed = 42,
+): HiwLineStrip {
+  const { widthPx, rows, label } = HIW_STRIP;
+  const gray = new Uint8ClampedArray(widthPx * rows);
+
+  const rand = mulberry32(seed);
+  for (let i = 0; i < gray.length; i++) {
+    gray[i] = KRAFT_GRAY + gaussianNoise(rand) * KRAFT_NOISE_SIGMA;
+  }
+  for (const y of HIW_STRIP.tapeSeamY) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let x = 0; x < widthPx; x++) {
+        gray[(y + dy) * widthPx + x] = TAPE_GRAY;
+      }
+    }
+  }
+  for (let y = label.y0; y <= label.y1; y++) {
+    for (let x = label.x0; x <= label.x1; x++) {
+      gray[y * widthPx + x] = LABEL_GRAY;
+    }
+  }
+
+  // Barcode (rotated 90° CCW like the generator's np.rot90(bc, k=1)).
+  const els = code128Elements(payload);
+  const m = HIW_STRIP.barcodeModulePx;
+  const totalModules = HIW_STRIP.quietModules * 2 + els.reduce((a, b) => a + b, 0);
+  const bcW = totalModules * m; // modules run along travel (y) after rotation
+  const bcH = HIW_STRIP.barcodeRowsModules * m; // 50 px cross-belt
+  const moduleIsBar: boolean[] = new Array<boolean>(totalModules).fill(false);
+  {
+    let mod = HIW_STRIP.quietModules;
+    els.forEach((w, i) => {
+      if (i % 2 === 0) {
+        for (let k = 0; k < w; k++) moduleIsBar[mod + k] = true;
+      }
+      mod += w;
+    });
+  }
+  const x0 = Math.floor((widthPx - bcH) / 2);
+  const y0 = label.y0 + Math.floor((label.y1 - label.y0 - bcW) / 2);
+  for (let i = 0; i < bcW; i++) {
+    const y = y0 + i;
+    // rot90(k=1): out[i][j] = in[j][bcW - 1 - i]
+    const col = bcW - 1 - i;
+    const module = Math.floor(col / m);
+    const bar = moduleIsBar[module] ? 0 : 255;
+    for (let j = 0; j < bcH; j++) {
+      gray[y * widthPx + (x0 + j)] = bar;
+    }
+  }
+
+  return {
+    widthPx,
+    rows,
+    gray,
+    labelRect: { ...label },
+    barcode: { x0, y0, w: bcH, h: bcW },
+  };
+}
+
+export interface CompositeHiwStrip {
+  widthPx: number;
+  /** Rows actually present in the composite (encoder order, from row 0). */
+  rowCount: number;
+  rgba: Uint8ClampedArray;
+}
+
+/**
+ * Composite strip rows (encoder order) into an RGBA buffer. `visibleRows`
+ * supports progressive display (t3-2): rows arrive as the encoder advances.
+ */
+export function compositeHiwStripRows(
+  strip: HiwLineStrip,
+  visibleRows?: number,
+): CompositeHiwStrip {
+  const rowCount = Math.max(
+    0,
+    Math.min(strip.rows, Math.floor(visibleRows ?? strip.rows)),
+  );
+  const rgba = new Uint8ClampedArray(strip.widthPx * rowCount * 4);
+  for (let y = 0; y < rowCount; y++) {
+    for (let x = 0; x < strip.widthPx; x++) {
+      const g = strip.gray[y * strip.widthPx + x];
+      const o = (y * strip.widthPx + x) * 4;
+      rgba[o] = g;
+      rgba[o + 1] = g;
+      rgba[o + 2] = g;
+      rgba[o + 3] = 255;
+    }
+  }
+  return { widthPx: strip.widthPx, rowCount, rgba };
+}
