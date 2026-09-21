@@ -295,6 +295,12 @@ const CODE128_PATTERNS: ReadonlyArray<readonly [number, number, number, number, 
   [2, 3, 3, 1, 1, 1],
 ];const CODE128_START_B = 104;
 const CODE128_STOP = [2, 3, 3, 1, 1, 1, 2] as const;
+/** Start symbol 211214 (value 104 in the ISO 15417 table): the convention
+ * real-world Code 128 B symbols and bwip-js use, and the pattern the demo's
+ * decoder (zxing-cpp) maps to Code B mode with checksum base 104. Emitting
+ * the ISO "Start B" 211232 makes zxing-cpp decode as CODE C. Mirrors
+ * scripts/gen_hiw_assets.py. */
+const CODE128_START_B_PAT = [2, 1, 1, 2, 1, 4] as const;
 
 /** Bar/space element widths for an ISO Code 128 B symbol. */
 export function code128Elements(payload: string): number[] {
@@ -303,9 +309,10 @@ export function code128Elements(payload: string): number[] {
     if (v < 0 || v > 94) throw new Error(`Code 128 B: unsupported char '${c}'`);
     return v;
   });
-  const csum = (CODE128_START_B + data.reduce((a, b) => a + b, 0)) % 103;
-  const els: number[] = [];
-  for (const v of [CODE128_START_B, ...data, csum]) {
+  // Position-weighted checksum, as decoders require.
+  const csum = (CODE128_START_B + data.reduce((a, b, i) => a + (i + 1) * b, 0)) % 103;
+  const els: number[] = [...CODE128_START_B_PAT];
+  for (const v of [...data, csum]) {
     els.push(...CODE128_PATTERNS[v]);
   }
   els.push(...CODE128_STOP);
@@ -319,16 +326,18 @@ export function code128Elements(payload: string): number[] {
 export const HIW_STRIP = {
   widthPx: 570,
   rows: 560,
-  label: { x0: 85, x1: 485, y0: 70, y1: 470 },
+  label: { x0: 50, x1: 520, y0: 215, y1: 275 },
   tapeSeamY: [120, 440] as readonly number[],
   barcodeModulePx: 2,
   quietModules: 10,
-  barcodeRowsModules: 25,
+  barcodeRowsModules: 30,
 } as const;
 
 // Grayscale equivalents of the generator's BGR constants (BT.601 luma).
-const KRAFT_GRAY = Math.round(0.114 * 106 + 0.587 * 138 + 0.299 * 168); // 143
-const TAPE_GRAY = Math.round(0.114 * 88 + 0.587 * 108 + 0.299 * 128); // 112
+// The generator writes true RGB PNGs (cv2.imencode), so the luma weights
+// apply to the RGB channels: KRAFT BGR (106,138,168) -> RGB (168,138,106).
+const KRAFT_GRAY = Math.round(0.114 * 168 + 0.587 * 138 + 0.299 * 106); // 132
+const TAPE_GRAY = Math.round(0.114 * 128 + 0.587 * 108 + 0.299 * 88); // 104
 const LABEL_GRAY = 250;
 /** Combined sigma of the generator's two noise passes (luma-projected). */
 const KRAFT_NOISE_SIGMA = 1.65;
@@ -387,12 +396,14 @@ export function buildHiwLineStripRows(
     }
   }
 
-  // Barcode (rotated 90° CCW like the generator's np.rot90(bc, k=1)).
+  // Barcode in NORMAL orientation (mirrors the generator): the bar/space
+  // pattern runs along the cross-belt axis (x); the bars extend along the
+  // travel axis (y) — the geometry a 1D line scanner reads.
   const els = code128Elements(payload);
   const m = HIW_STRIP.barcodeModulePx;
   const totalModules = HIW_STRIP.quietModules * 2 + els.reduce((a, b) => a + b, 0);
-  const bcW = totalModules * m; // modules run along travel (y) after rotation
-  const bcH = HIW_STRIP.barcodeRowsModules * m; // 50 px cross-belt
+  const bcW = totalModules * m; // 418 px cross-belt
+  const bcH = HIW_STRIP.barcodeRowsModules * m; // 60 px travel (full label height)
   const moduleIsBar: boolean[] = new Array<boolean>(totalModules).fill(false);
   {
     let mod = HIW_STRIP.quietModules;
@@ -403,16 +414,13 @@ export function buildHiwLineStripRows(
       mod += w;
     });
   }
-  const x0 = Math.floor((widthPx - bcH) / 2);
-  const y0 = label.y0 + Math.floor((label.y1 - label.y0 - bcW) / 2);
+  const x0 = Math.floor((widthPx - bcW) / 2);
+  const y0 = label.y0 + Math.floor((label.y1 - label.y0 - bcH) / 2);
   for (let i = 0; i < bcW; i++) {
-    const y = y0 + i;
-    // rot90(k=1): out[i][j] = in[j][bcW - 1 - i]
-    const col = bcW - 1 - i;
-    const module = Math.floor(col / m);
-    const bar = moduleIsBar[module] ? 0 : 255;
+    const x = x0 + i;
+    const bar = moduleIsBar[Math.floor(i / m)] ? 0 : 255;
     for (let j = 0; j < bcH; j++) {
-      gray[y * widthPx + (x0 + j)] = bar;
+      gray[(y0 + j) * widthPx + x] = bar;
     }
   }
 
@@ -421,7 +429,7 @@ export function buildHiwLineStripRows(
     rows,
     gray,
     labelRect: { ...label },
-    barcode: { x0, y0, w: bcH, h: bcW },
+    barcode: { x0, y0, w: bcW, h: bcH },
   };
 }
 

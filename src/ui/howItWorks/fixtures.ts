@@ -48,6 +48,19 @@ function assetPath(fixtureId: string, captureId: string, stage: string): string 
 }
 
 /**
+ * The four side cameras that cannot see the FRONT-face label (edge-on or
+ * hidden face): no candidate, no decode crop, no expected decode. They still
+ * capture the parcel — their frames show the box WITHOUT a label, which is
+ * what teaches "same label, different viewing angle" (step 5).
+ */
+const OUT_OF_VIEW_SIDE_CAPTURES = [
+  { captureId: 'cap-cam-3-01', sensorId: 'cam-side-3', kind: 'AREA_CAMERA' as const, simTimeMs: 36_000, encoderSpanMm: [790, 790] as [number, number] },
+  { captureId: 'cap-cam-4-01', sensorId: 'cam-side-4', kind: 'AREA_CAMERA' as const, simTimeMs: 36_100, encoderSpanMm: [795, 795] as [number, number] },
+  { captureId: 'cap-cam-5-01', sensorId: 'cam-side-5', kind: 'AREA_CAMERA' as const, simTimeMs: 36_200, encoderSpanMm: [800, 800] as [number, number] },
+  { captureId: 'cap-cam-6-01', sensorId: 'cam-side-6', kind: 'AREA_CAMERA' as const, simTimeMs: 36_300, encoderSpanMm: [805, 805] as [number, number] },
+];
+
+/**
  * Story pose: entry (−150 mm) → line-scan planes (~250 mm) → hold at the end
  * of section 1 (450 mm) → section 2 side cameras (650..950 mm) → exit
  * (1400 mm). One keyframe per step boundary, 8 steps × 7.5 s.
@@ -80,8 +93,9 @@ function buildSteps(capture: { line: string; side: string }): ReplayManifest['st
 /**
  * Success fixture: a clean parcel. Top label read by the top line scan;
  * side label read by TWO side cameras (duplicate reads that must merge);
- * a third side camera sees nothing usable (out-of-view → no candidate,
- * teaches "no candidate" vs "failed decode").
+ * the other four side cameras see the label edge-on / on a hidden face
+ * (out-of-view → no candidate, teaches "no candidate" vs "failed
+decode").
  */
 export function buildSuccessManifest(): ReplayManifest {
   const parcelId = 'PARCEL-2026-0001';
@@ -100,10 +114,10 @@ export function buildSuccessManifest(): ReplayManifest {
         labelInstanceId: 'L-top',
         source: 'pixels',
         quadPx: [
-          [85, 61],
-          [486, 61],
-          [486, 479],
-          [85, 479],
+          [50, 215],
+          [521, 215],
+          [521, 276],
+          [50, 276],
         ],
       },
       decodeCropPath: assetPath('success', 'cap-ls-top-01', 'decode-crop'),
@@ -151,6 +165,11 @@ export function buildSuccessManifest(): ReplayManifest {
       decodeCropPath: assetPath('success', 'cap-cam-2-01', 'decode-crop'),
       expectedDecode: { decoded: true, payload: sidePayload, reasons: [] },
     },
+    ...OUT_OF_VIEW_SIDE_CAPTURES.map((c) => ({
+      ...c,
+      parcelId,
+      stages: STAGE_ORDER.map((stage) => ({ stage, path: assetPath('success', c.captureId, stage) })),
+    })),
   ];
 
   const observations: ReplayManifest['observations'] = [
@@ -234,10 +253,11 @@ export function buildSuccessManifest(): ReplayManifest {
 }
 
 /**
- * No-read fixture: the top line scan still reads, but BOTH side cameras
- * fail — glare on cam-side-1, blur/miss on cam-side-2 (whose candidate is
- * geometry-derived, so the UI must label it "illustrative"). The side label
- * is NEVER attributed a value.
+ * No-read fixture: the top line scan still reads, but BOTH label-facing
+ * side cameras fail — glare on cam-side-1, low-contrast wrap on cam-side-2
+ * (whose candidate is geometry-derived, so the UI must label it
+ * "illustrative"). The other four side cameras see no label at all.
+ * The side label is NEVER attributed a value.
  */
 export function buildNoReadManifest(): ReplayManifest {
   const parcelId = 'PARCEL-2026-0002';
@@ -256,10 +276,10 @@ export function buildNoReadManifest(): ReplayManifest {
         labelInstanceId: 'L-top',
         source: 'pixels',
         quadPx: [
-          [85, 61],
-          [486, 61],
-          [486, 479],
-          [85, 479],
+          [50, 215],
+          [521, 215],
+          [521, 276],
+          [50, 276],
         ],
       },
       decodeCropPath: assetPath('no-read', 'cap-ls-top-01', 'decode-crop'),
@@ -310,6 +330,11 @@ export function buildNoReadManifest(): ReplayManifest {
       decodeCropPath: assetPath('no-read', 'cap-cam-2-01', 'decode-crop'),
       expectedDecode: { decoded: false, reasons: ['QUALITY:LOW_CONTRAST'] },
     },
+    ...OUT_OF_VIEW_SIDE_CAPTURES.map((c) => ({
+      ...c,
+      parcelId,
+      stages: STAGE_ORDER.map((stage) => ({ stage, path: assetPath('no-read', c.captureId, stage) })),
+    })),
   ];
 
   const observations: ReplayManifest['observations'] = [

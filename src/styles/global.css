@@ -1697,6 +1697,201 @@ body {
   letter-spacing: 0.04em;
 }
 
+/* ---- Step 4: line-scan decode (t3-4) ---- */
+
+.step4-decode {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step4-reader {
+  padding: 5px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: #0d1117;
+  font-size: 0.82em;
+  color: var(--accent);
+}
+
+.step4-crop {
+  margin: 0;
+  position: relative;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.step4-crop img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.step4-sample-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.step4-sample-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(77, 163, 255, 0.85);
+}
+
+.step4-runs-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.step4-runs-title {
+  color: var(--text-dim);
+  font-size: 0.78em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.step4-runs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+}
+
+.step4-run {
+  height: 100%;
+  border-radius: 1px;
+}
+
+.step4-run-dark {
+  background: #1a1a1a;
+  border: 1px solid #444;
+}
+
+.step4-run-light {
+  background: #e8e8e8;
+}
+
+.step4-runs-count {
+  color: var(--text-dim);
+  font-size: 0.75em;
+  white-space: nowrap;
+}
+
+.step4-value {
+  padding: 8px 12px;
+  border: 1px solid #3fb950;
+  border-radius: 6px;
+  background: #0d1117;
+  font-family: var(--mono, monospace);
+  font-size: 1.05em;
+  color: #7ee787;
+}
+
+.step4-no-read {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid #e3a008;
+  border-radius: 6px;
+  background: #0d1117;
+}
+
+.step4-no-read-label {
+  color: #e3a008;
+  font-weight: 600;
+}
+
+.step4-reason {
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+/* ---- Step 5: side-camera capture (t4-1) ---- */
+
+.step5-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step5-caption {
+  color: var(--text-dim);
+  font-size: 0.85em;
+  margin: 0;
+}
+
+.step5-thumbs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.step5-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: #0d1117;
+  color: var(--text-dim);
+  font-size: 0.72em;
+  cursor: pointer;
+}
+
+.step5-chip img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 3px;
+}
+
+.step5-chip-active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.step5-enlarged {
+  margin: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.step5-enlarged img {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  background: #161a20;
+}
+
+.step5-enlarged figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 6px 10px;
+  font-size: 0.78em;
+  color: var(--text-dim);
+  font-family: var(--mono, monospace);
+}
+
+.step5-enlarged [data-testid='step5-label-visible'] {
+  color: #7ee787;
+}
+
+.step5-enlarged [data-testid='step5-label-not-visible'] {
+  color: #e3a008;
+}
+
 /* ---- Step 3: line-scan preparation stages (t3-3) ---- */
 
 .step3-prep {

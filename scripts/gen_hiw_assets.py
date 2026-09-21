@@ -26,8 +26,11 @@ Rendering
   standard checksum — decodable by production ZXing).
 * area captures: synthetic box in a 2D pinhole camera; label rendered on the
   FRONT face (visible to the 0° and 45° cameras), painter's algorithm.
-  no-read fixtures: cam1 = glare blob over the label, cam2 = label under a
-  low-contrast shrink wrap (below the pixel-detection threshold).
+  The four other side cameras (135°/180°/225°/270°) see the box WITHOUT a
+  label (edge-on / hidden face) -> no candidate, no decode crop, no
+  expectedDecode. no-read fixtures: cam1 = glare blob over the label,
+  cam2 = label under a low-contrast shrink wrap (below the pixel-detection
+  threshold).
 
 Stage chain per capture (mirrors the live pipeline order):
     raw -> maskedCrop -> grayscaleContrast -> edgeMap -> candidateOverlay
@@ -86,15 +89,15 @@ SIDE_CAM_VIEW = {
     "cam-side-6": (270.0, "low"),
 }
 
-START_B = 104
 QUIET_MODULES = 10
-BARCODE_ROWS_MODULES = 25
+BARCODE_ROWS_MODULES = 30  # bar band height in modules (60 px = full label height)
 
 
 # ---------------------------------------------------------------------------
-# Code 128 (ISO 15417, Code 128 B) — patterns ported verbatim from
-# src/pipeline/code128Table.ts; standard (unweighted) checksum so production
-# ZXing accepts the symbols.
+# Code 128 (ISO 15417, Code 128 B) — data patterns ported from
+# src/pipeline/code128Table.ts (verified value-by-value against the ISO
+# 15417:2007 table). Checksum is the standard POSITION-WEIGHTED sum
+# (start + sum(i*v_i)) mod 103, as decoders require.
 # ---------------------------------------------------------------------------
 
 CODE128_PATTERNS = [
@@ -208,16 +211,46 @@ CODE128_PATTERNS = [
 ]
 
 
+# Start symbol: pattern 211214 (value 104 in the ISO 15417 table). This is
+# the convention real-world Code 128 B symbols and bwip-js use, and the
+# pattern the demo's decoder (zxing-cpp) maps to Code B mode with checksum
+# base 104. NOTE: emitting the ISO "Start B" 211232 (value 105) makes
+# zxing-cpp decode the payload as CODE C (its start-value->mode mapping is
+# 104->B, 105->C) — verified, do not use.
+START_B = 104
+START_B_PAT = [2, 1, 1, 2, 1, 4]
+
+
 def code128_elements(payload: str) -> list[int]:
     """Bar/space element widths for an ISO Code 128 B symbol."""
     data = [ord(c) - 32 for c in payload]
-    csum = (START_B + sum(data)) % 103
-    values = [START_B, *data, csum]
-    els = []
-    for v in values:
+    csum = (START_B + sum((i + 1) * v for i, v in enumerate(data))) % 103
+    els = list(START_B_PAT)
+    for v in (*data, csum):
         els.extend(CODE128_PATTERNS[v])
     els.extend([2, 3, 3, 1, 1, 1, 2])  # stop pattern + 2-module guard
     return els
+
+
+def _zxing_semantics_decode(els: list[int]) -> str:
+    """Decode a Code 128 element stream the way zxing-cpp does (the
+    decoder the browser demo uses). Raises on any structural violation."""
+    assert els[-7:] == [2, 3, 3, 1, 1, 1, 2], "stop pattern missing"
+    body = els[:-7]
+    assert len(body) % 6 == 0, "symbol boundary misaligned"
+    pat2val = {tuple(p): i for i, p in enumerate(CODE128_PATTERNS)}
+    pat2val[tuple([2, 1, 1, 4, 1, 2])] = 103  # ISO 15417 table rows 103-105
+    pat2val[tuple([2, 1, 1, 2, 1, 4])] = 104  # (data table above stops at 102)
+    pat2val[tuple([2, 1, 1, 2, 3, 2])] = 105
+    syms = [pat2val[tuple(body[i * 6 : (i + 1) * 6])] for i in range(len(body) // 6)]
+    start, data, csum = syms[0], syms[1:-1], syms[-1]
+    assert start in (103, 104, 105), f"invalid start {start}"
+    assert (start + sum((i + 1) * v for i, v in enumerate(data))) % 103 == csum, "checksum"
+    mode = 204 - start  # zxing-cpp: 103->A(101), 104->B(100), 105->C(99)
+    if mode != 100:  # this generator emits pure Code B only
+        raise ValueError(f"start {start} selects mode {mode}, not Code B")
+    assert all(0 <= v <= 94 for v in data), "value outside Code B range"
+    return "".join(chr(v + 32) for v in data)
 
 
 def render_barcode(payload: str, module_px: int) -> np.ndarray:
@@ -392,15 +425,16 @@ def render_top_strip(payload: str, seed: int) -> np.ndarray:
     img = np.clip(img, 0, 255).astype(np.uint8)
     for y in (120, 440):  # packing tape seams crossing the parcel
         cv2.line(img, (0, y), (STRIP_W, y), (88, 108, 128), 3)
-    # white label, barcode along travel (y axis rotated 90°: barcode rows = x)
-    l0, l1, t0, t1 = 85, 485, 70, 470
+    # white label, barcode in NORMAL orientation: the bar/space pattern runs
+    # along the cross-belt axis (x) and the bars extend along the travel
+    # axis (y) — the geometry a 1D line scanner reads (each sensor row cuts
+    # the whole bar pattern).
+    l0, l1, t0, t1 = 50, 520, 215, 275
     cv2.rectangle(img, (l0, t0), (l1, t1), (250, 250, 250), -1)
     bc = render_barcode(payload, 2)
-    # rotate: barcode width runs along y (travel), height along x
-    bc_rot = np.rot90(bc, k=1)  # (w_bc, h_bc) -> (h_bc, w_bc)
-    x0 = (STRIP_W - bc_rot.shape[1]) // 2
-    y0 = t0 + (t1 - t0 - bc_rot.shape[0]) // 2
-    img[y0 : y0 + bc_rot.shape[0], x0 : x0 + bc_rot.shape[1]] = cv2.cvtColor(bc_rot, cv2.COLOR_GRAY2BGR)
+    x0 = (STRIP_W - bc.shape[1]) // 2
+    y0 = t0 + (t1 - t0 - bc.shape[0]) // 2
+    img[y0 : y0 + bc.shape[0], x0 : x0 + bc.shape[1]] = cv2.cvtColor(bc, cv2.COLOR_GRAY2BGR)
     return img
 
 
@@ -497,26 +531,47 @@ def build_capture(spec_cap: dict, raw: np.ndarray, poly: np.ndarray | None, out_
     detected = detect_candidate(raw)
     if detected is not None:
         quad, source = detected, "pixels"
-    else:
+    elif "candidate" in spec_cap:
         quad = np.array(spec_cap["candidate"]["quadPx"], dtype=np.float32)
         source = "geometry"
-    stages = stage_stages(raw, quad, poly)
+    else:
+        # No label in frame AND the spec declares no candidate: the camera
+        # sees the parcel from an angle with no label. No candidate, no
+        # decode crop, no expectedDecode.
+        quad, source = None, None
     (out_dir / "raw.png").write_bytes(_png(raw))
-    for name, img in stages.items():
-        (out_dir / f"{name}.png").write_bytes(_png(img))
-    # aspect-preserving rectify to a fixed width, so barcode modules land at
-    # a ZXing-friendly scale (~3 px/module)
-    x0 = quad[:, 0].min(); x1 = quad[:, 0].max()
-    y0 = quad[:, 1].min(); y1 = quad[:, 1].max()
-    decode_w = 700
-    scale = decode_w / max(x1 - x0, 1)
-    decode_h = max(60, int(round((y1 - y0) * scale)))
-    crop = rectify(raw, quad, decode_w, decode_h)
-    crop_bytes = _png(crop)
-    (out_dir / "rectifiedCrop.png").write_bytes(crop_bytes)  # == decode input
-    (out_dir / "decode-crop.png").write_bytes(crop_bytes)
+    if quad is not None:
+        stages = stage_stages(raw, quad, poly)
+        for name, img in stages.items():
+            (out_dir / f"{name}.png").write_bytes(_png(img))
+        # aspect-preserving rectify to a fixed width, so barcode modules land at
+        # a ZXing-friendly scale (~7 px/module). NOTE: the quad covers the whole
+        # label (quiet zone included), so a smaller width leaves bars sub-module
+        # wide (verified: 700 px -> 3 px bars -> ZXing Code128 fails).
+        x0 = quad[:, 0].min(); x1 = quad[:, 0].max()
+        y0 = quad[:, 1].min(); y1 = quad[:, 1].max()
+        decode_w = 1300
+        scale = decode_w / max(x1 - x0, 1)
+        decode_h = max(60, int(round((y1 - y0) * scale)))
+        crop = rectify(raw, quad, decode_w, decode_h)
+        crop_bytes = _png(crop)
+        (out_dir / "rectifiedCrop.png").write_bytes(crop_bytes)  # == decode input
+        (out_dir / "decode-crop.png").write_bytes(crop_bytes)
+    else:
+        # Honest no-candidate chain: overlay is the bare frame; the
+        # rectified-crop slot is a neutral placeholder (there is nothing to
+        # rectify) and NO decode-crop.png is emitted.
+        stages = stage_stages(raw, np.array(
+            [[40, 40], [40, 40], [40, 40], [40, 40]], dtype=np.float32), poly)
+        (out_dir / "maskedCrop.png").write_bytes(_png(stages["maskedCrop"]))
+        (out_dir / "grayscaleContrast.png").write_bytes(_png(stages["grayscaleContrast"]))
+        (out_dir / "edgeMap.png").write_bytes(_png(stages["edgeMap"]))
+        (out_dir / "candidateOverlay.png").write_bytes(_png(raw))
+        ph = base_canvas(1300, 168, np.array([24.0, 24.0, 26.0]), seed=7)
+        (out_dir / "rectifiedCrop.png").write_bytes(_png(ph))
     cap = dict(spec_cap)
-    cap["candidate"] = {**spec_cap["candidate"], "source": source, "quadPx": quad.astype(int).tolist()}
+    if quad is not None:
+        cap["candidate"] = {**spec_cap["candidate"], "source": source, "quadPx": quad.astype(int).tolist()}
     cap["params"] = {
         "detector": {
             "threshold": DETECT_THRESHOLD,
@@ -525,7 +580,6 @@ def build_capture(spec_cap: dict, raw: np.ndarray, poly: np.ndarray | None, out_
             "minColumnStdDev": DETECT_MIN_COL_STD,
         },
         "canny": [80, 160],
-        "decodeCropSize": [decode_w, decode_h],
     }
     return cap
 
@@ -692,23 +746,41 @@ def selftest(out_root: Path) -> None:
             for st in c["stages"]:
                 p = out_root / st["path"]
                 assert p.exists() and p.stat().st_size > 2000, st["path"]
-            assert (out_root / c["decodeCropPath"]).exists()
+            if c.get("decodeCropPath") is not None:
+                assert (out_root / c["decodeCropPath"]).exists()
+        # out-of-view cameras (edge-on / hidden face): no candidate, no
+        # decode crop, no expectedDecode, and no decode-crop.png on disk
+        for n in (3, 4, 5, 6):
+            c = by_cap[f"cap-cam-{n}-01"]
+            assert c["sensorId"] == f"cam-side-{n}"
+            assert "candidate" not in c
+            assert c.get("decodeCropPath") is None
+            assert c.get("expectedDecode") is None
+            assert not (out_dir / f"cap-cam-{n}-01/decode-crop.png").exists()
         if fid == "success":
             for c in m["captures"]:
-                assert c["candidate"]["source"] == "pixels", c["captureId"]
+                if "candidate" in c:
+                    assert c["candidate"]["source"] == "pixels", c["captureId"]
         else:
             assert by_cap["cap-ls-top-01"]["candidate"]["source"] == "pixels"
             assert by_cap["cap-cam-1-01"]["candidate"]["source"] == "pixels"
             assert by_cap["cap-cam-2-01"]["candidate"]["source"] == "geometry"
             assert "QUALITY:LOW_CONTRAST" in by_cap["cap-cam-2-01"]["expectedDecode"]["reasons"]
-        # area frames: all distinct (viewing angle changes the frame)
+        # area frames: all six distinct (viewing angle changes the frame)
         area_files = sorted(p for p in out_dir.glob("cap-cam-*/raw.png"))
         hashes = {sha256_file(p) for p in area_files}
-        assert len(area_files) >= 2 and len(hashes) == len(area_files)
+        assert len(area_files) == 6 and len(hashes) == 6
         # barcode sanity: rendered symbol decodes structurally (element count)
         els = code128_elements("A1F4-2026-0001")
         assert len(els) == 16 * 6 + 7  # (start + 14 data + checksum) x 6 + stop
         assert sum(els) == 16 * 11 + 13  # 11 modules per value + 13 stop modules
+        # and end-to-end: decode the element stream with zxing-cpp semantics
+        # (start-value->mode: 104->B, 105->C; checksum = (start + sum i*v_i)
+        # mod 103). Mirrors the demo's decoder, so encoder regressions
+        # (start pattern, checksum base, weighting) fail here. The full
+        # pixel-level check lives in the vitest suite (zxing-wasm on the
+        # generated decode-crops).
+        assert _zxing_semantics_decode(code128_elements("A1F4-2026-0001")) == "A1F4-2026-0001"
     # determinism: manifest byte-identical across two builds
     a = sha256_file(out_root / "hiw/assets/success/manifest.json")
     m2 = build_manifest(

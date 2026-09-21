@@ -49,6 +49,12 @@ import {
   lineScanHighlightAt,
 } from './step2Capture';
 import { Step3Prep } from './step3Prep';
+import { Step4Decode, decodeHighlightAt } from './step4Decode';
+import {
+  Step5SideCameras,
+  SideCameraCaptureHighlight,
+  type SideCamId,
+} from './step5SideCameras';
 
 export type HiwMode = 'guided' | 'live';
 export type HiwViewPreset = 'orbit' | 'top' | 'side' | 'sensor';
@@ -183,15 +189,21 @@ function HiwScenePanel({
   manifest,
   timeMs,
   view,
+  sideCamId,
 }: {
   manifest: ReplayManifest;
   timeMs: number;
   view: HiwViewPreset;
+  sideCamId: SideCamId;
 }) {
   const config = useMemo(() => defaultConfig(), []);
   const highlight = sceneHighlightAt(manifest, timeMs);
+  const decodeHl =
+    highlight === 'line-scan-decode' ? decodeHighlightAt(manifest, timeMs) : null;
   const lineScanCapture =
-    highlight === 'line-scan' ? lineScanHighlightAt(manifest, timeMs) : null;
+    highlight === 'line-scan'
+      ? lineScanHighlightAt(manifest, timeMs)
+      : (decodeHl?.capture ?? null);
   const stepIdx = stepIndexAt(manifest.steps, manifest.durationMs, timeMs);
   const activeSensors = manifest.steps[stepIdx]?.sensorIds ?? [];
   const highlightId =
@@ -243,7 +255,11 @@ function HiwScenePanel({
           z1Mm={lineScanCapture.encoderSpanMm[1]}
           exposed={bottomExposedZRange(config)[1] > lineScanCapture.encoderSpanMm[0] &&
             bottomExposedZRange(config)[0] < lineScanCapture.encoderSpanMm[1]}
+          found={decodeHl ? decodeHl.reader : null}
         />
+      )}
+      {highlight === 'side-cameras' && (
+        <SideCameraCaptureHighlight selectedId={sideCamId} />
       )}
       {view === 'orbit' ? (
         <>
@@ -266,9 +282,13 @@ function HiwScenePanel({
 function HiwImagePanel({
   manifest,
   timeMs,
+  sideCamId,
+  onSideCamSelect,
 }: {
   manifest: ReplayManifest;
   timeMs: number;
+  sideCamId: SideCamId;
+  onSideCamSelect: (id: SideCamId) => void;
 }) {
   const stepIdx = stepIndexAt(manifest.steps, manifest.durationMs, timeMs);
   const step = manifest.steps[stepIdx];
@@ -299,6 +319,31 @@ function HiwImagePanel({
           Step 3 · line-scan preparation
         </div>
         <Step3Prep manifest={manifest} timeMs={timeMs} />
+      </section>
+    );
+  }
+  if (step.step === 4) {
+    return (
+      <section className="hiw-image-panel" data-testid="hiw-image-panel">
+        <div className="hiw-image-step" data-testid="image-panel-step">
+          Step 4 · line-scan decode
+        </div>
+        <Step4Decode manifest={manifest} timeMs={timeMs} />
+      </section>
+    );
+  }
+  if (step.step === 5) {
+    return (
+      <section className="hiw-image-panel" data-testid="hiw-image-panel">
+        <div className="hiw-image-step" data-testid="image-panel-step">
+          Step 5 · side-camera capture
+        </div>
+        <Step5SideCameras
+          manifest={manifest}
+          timeMs={timeMs}
+          selectedId={sideCamId}
+          onSelect={onSideCamSelect}
+        />
       </section>
     );
   }
@@ -359,6 +404,9 @@ export function HiwShell({
   const stepIdx = stepIndexAt(manifest.steps, manifest.durationMs, playback.timeMs);
   const activeStep = stepIdx + 1;
   const [viewPreset, setViewPreset] = useState<HiwViewPreset>('orbit');
+  // Selected side camera (step 5): shared by the 3D cone emphasis and the
+  // right-panel thumbnails.
+  const [sideCamId, setSideCamId] = useState<SideCamId>('cam-side-1');
   // The chip populates only once the parcel crosses the entry photoeye.
   const entered = hasCrossedPhotoeye(manifest.keyframes, playback.timeMs);
   const chipText = entered ? manifest.parcel.parcelId : '— awaiting entry —';
@@ -423,6 +471,7 @@ export function HiwShell({
                 manifest={manifest}
                 timeMs={playback.timeMs}
                 view={viewPreset}
+                sideCamId={sideCamId}
               />
               <div
                 className="hiw-view-presets"
@@ -443,7 +492,12 @@ export function HiwShell({
                 ))}
               </div>
             </section>
-            <HiwImagePanel manifest={manifest} timeMs={playback.timeMs} />
+            <HiwImagePanel
+              manifest={manifest}
+              timeMs={playback.timeMs}
+              sideCamId={sideCamId}
+              onSideCamSelect={setSideCamId}
+            />
           </div>
           <StoryTimeline
             manifest={manifest}

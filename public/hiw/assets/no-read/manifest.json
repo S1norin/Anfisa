@@ -5,20 +5,20 @@
         "labelInstanceId": "L-top",
         "quadPx": [
           [
-            85,
-            61
+            50,
+            215
           ],
           [
-            486,
-            61
+            521,
+            215
           ],
           [
-            486,
-            479
+            521,
+            276
           ],
           [
-            85,
-            479
+            50,
+            276
           ]
         ],
         "source": "pixels"
@@ -39,10 +39,6 @@
         "canny": [
           80,
           160
-        ],
-        "decodeCropSize": [
-          700,
-          730
         ],
         "detector": {
           "closeKernel": 15,
@@ -122,10 +118,6 @@
           80,
           160
         ],
-        "decodeCropSize": [
-          700,
-          430
-        ],
         "detector": {
           "closeKernel": 15,
           "minArea": 1500,
@@ -204,10 +196,6 @@
           80,
           160
         ],
-        "decodeCropSize": [
-          700,
-          748
-        ],
         "detector": {
           "closeKernel": 15,
           "minArea": 1500,
@@ -241,6 +229,202 @@
         },
         {
           "path": "hiw/assets/no-read/cap-cam-2-01/rectifiedCrop.png",
+          "stage": "rectifiedCrop"
+        }
+      ]
+    },
+    {
+      "captureId": "cap-cam-3-01",
+      "encoderSpanMm": [
+        790,
+        790
+      ],
+      "kind": "AREA_CAMERA",
+      "params": {
+        "canny": [
+          80,
+          160
+        ],
+        "detector": {
+          "closeKernel": 15,
+          "minArea": 1500,
+          "minColumnStdDev": 18.0,
+          "threshold": 200
+        }
+      },
+      "parcelId": "PARCEL-2026-0002",
+      "sensorId": "cam-side-3",
+      "simTimeMs": 36000,
+      "stages": [
+        {
+          "path": "hiw/assets/no-read/cap-cam-3-01/raw.png",
+          "stage": "raw"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-3-01/maskedCrop.png",
+          "stage": "maskedCrop"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-3-01/grayscaleContrast.png",
+          "stage": "grayscaleContrast"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-3-01/edgeMap.png",
+          "stage": "edgeMap"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-3-01/candidateOverlay.png",
+          "stage": "candidateOverlay"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-3-01/rectifiedCrop.png",
+          "stage": "rectifiedCrop"
+        }
+      ]
+    },
+    {
+      "captureId": "cap-cam-4-01",
+      "encoderSpanMm": [
+        795,
+        795
+      ],
+      "kind": "AREA_CAMERA",
+      "params": {
+        "canny": [
+          80,
+          160
+        ],
+        "detector": {
+          "closeKernel": 15,
+          "minArea": 1500,
+          "minColumnStdDev": 18.0,
+          "threshold": 200
+        }
+      },
+      "parcelId": "PARCEL-2026-0002",
+      "sensorId": "cam-side-4",
+      "simTimeMs": 36100,
+      "stages": [
+        {
+          "path": "hiw/assets/no-read/cap-cam-4-01/raw.png",
+          "stage": "raw"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-4-01/maskedCrop.png",
+          "stage": "maskedCrop"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-4-01/grayscaleContrast.png",
+          "stage": "grayscaleContrast"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-4-01/edgeMap.png",
+          "stage": "edgeMap"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-4-01/candidateOverlay.png",
+          "stage": "candidateOverlay"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-4-01/rectifiedCrop.png",
+          "stage": "rectifiedCrop"
+        }
+      ]
+    },
+    {
+      "captureId": "cap-cam-5-01",
+      "encoderSpanMm": [
+        800,
+        800
+      ],
+      "kind": "AREA_CAMERA",
+      "params": {
+        "canny": [
+          80,
+          160
+        ],
+        "detector": {
+          "closeKernel": 15,
+          "minArea": 1500,
+          "minColumnStdDev": 18.0,
+          "threshold": 200
+        }
+      },
+      "parcelId": "PARCEL-2026-0002",
+      "sensorId": "cam-side-5",
+      "simTimeMs": 36200,
+      "stages": [
+        {
+          "path": "hiw/assets/no-read/cap-cam-5-01/raw.png",
+          "stage": "raw"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-5-01/maskedCrop.png",
+          "stage": "maskedCrop"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-5-01/grayscaleContrast.png",
+          "stage": "grayscaleContrast"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-5-01/edgeMap.png",
+          "stage": "edgeMap"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-5-01/candidateOverlay.png",
+          "stage": "candidateOverlay"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-5-01/rectifiedCrop.png",
+          "stage": "rectifiedCrop"
+        }
+      ]
+    },
+    {
+      "captureId": "cap-cam-6-01",
+      "encoderSpanMm": [
+        805,
+        805
+      ],
+      "kind": "AREA_CAMERA",
+      "params": {
+        "canny": [
+          80,
+          160
+        ],
+        "detector": {
+          "closeKernel": 15,
+          "minArea": 1500,
+          "minColumnStdDev": 18.0,
+          "threshold": 200
+        }
+      },
+      "parcelId": "PARCEL-2026-0002",
+      "sensorId": "cam-side-6",
+      "simTimeMs": 36300,
+      "stages": [
+        {
+          "path": "hiw/assets/no-read/cap-cam-6-01/raw.png",
+          "stage": "raw"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-6-01/maskedCrop.png",
+          "stage": "maskedCrop"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-6-01/grayscaleContrast.png",
+          "stage": "grayscaleContrast"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-6-01/edgeMap.png",
+          "stage": "edgeMap"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-6-01/candidateOverlay.png",
+          "stage": "candidateOverlay"
+        },
+        {
+          "path": "hiw/assets/no-read/cap-cam-6-01/rectifiedCrop.png",
           "stage": "rectifiedCrop"
         }
       ]

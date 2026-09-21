@@ -101,8 +101,10 @@ describe('HowItWorksView shell (t2-2)', () => {
     expect(activeStep()).toBe(1);
     scrubTo(5);
     expect(activeStep()).toBe(5);
-    // The image panel follows the clock: step 5 is the side-camera capture.
-    expect(screen.getByTestId('image-panel-capture')).toHaveTextContent(
+    // The image panel follows the clock: step 5 is the side-camera capture
+    // (t4-1) — default selection is cam-side-1.
+    expect(screen.getByTestId('step5-side')).toHaveAttribute(
+      'data-capture-id',
       'cap-cam-1-01',
     );
     // Step 1 has no capture.
@@ -149,10 +151,10 @@ describe('HowItWorksView shell (t2-2)', () => {
     expect(screen.getByTestId('stage-panel')).toBeTruthy();
     expect(screen.queryByTestId('hiw-strip')).toBeNull();
 
-    // Step 4 (decode, same capture): the strip is complete, scanline gone.
+    // Step 4 (decode, same capture): the decode panel replaces the strip.
     setT(26000);
-    expect(rows()).toBe(560);
-    expect(markerLeft()).toBe('100%');
+    expect(screen.getByTestId('step4-decode')).toBeTruthy();
+    expect(screen.queryByTestId('hiw-strip')).toBeNull();
     expect(screen.queryByTestId('hiw-strip-scanline')).toBeNull();
 
     // Area-camera steps keep the placeholder, not the strip.
@@ -221,6 +223,24 @@ describe('HowItWorksView shell (t2-2)', () => {
       const img = tile.querySelector('img') as HTMLImageElement;
       expect(img.src).toContain(`/hiw/assets/success/cap-ls-top-01/${stage}.png`);
     }
+  });
+
+  it('step 5: six side-camera frames as chips, switching changes the enlarged frame (t4-1)', () => {
+    render(<HowItWorksView />);
+    scrubTo(5);
+    const panel = screen.getByTestId('step5-side');
+    expect(panel).toBeTruthy();
+    const thumbs = screen.getAllByTestId(/step5-thumb-cam-side-./);
+    expect(thumbs).toHaveLength(6);
+    expect((screen.getByTestId('step5-enlarged-img') as HTMLImageElement).src).toContain(
+      '/hiw/assets/success/cap-cam-1-01/raw.png',
+    );
+    fireEvent.click(screen.getByTestId('step5-chip-cam-side-5'));
+    expect((screen.getByTestId('step5-enlarged-img') as HTMLImageElement).src).toContain(
+      '/hiw/assets/success/cap-cam-5-01/raw.png',
+    );
+    // out-of-view camera: honest "no label" note, no fabricated claim
+    expect(screen.getByTestId('step5-label-not-visible')).toBeTruthy();
   });
 
   it('mode switch: live shows the unavailable placeholder; guided stays usable', () => {

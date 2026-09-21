@@ -111,6 +111,7 @@ export function LineScanCaptureHighlight({
   z1Mm,
   parcelTopMm = STORY_PARCEL_TOP_MM,
   exposed,
+  found = null,
 }: {
   beltWidthMm: number;
   z0Mm: number;
@@ -118,18 +119,29 @@ export function LineScanCaptureHighlight({
   parcelTopMm?: number;
   /** Bottom optical gap exposed (underside visible to the bottom reader). */
   exposed: boolean;
+  /** Reader that FOUND the candidate (step 4 decode highlight). */
+  found?: 'top' | 'bottom' | 'side' | null;
 }) {
   const w = beltWidthMm / 1000 + 0.08;
   const z0 = z0Mm / 1000;
   const z1 = z1Mm / 1000;
   const zc = (z0 + z1) / 2;
   const dz = Math.max(0.02, z1 - z0);
+  const topFound = found === 'top';
+  const bottomFound = found === 'bottom';
   return (
-    <group name="line-scan-highlight">
+    // userData (not a dashed data-* prop: R3F v8 walks dashed keys as
+    // nested property paths and crashes on Object3D, which has no `data`).
+    <group name="line-scan-highlight" userData={{ found: found ?? '' }}>
       {/* Top cross-belt scan plane at the parcel top face */}
       <mesh position={[0, parcelTopMm / 1000 + 0.004, zc]}>
         <boxGeometry args={[w, 0.01, dz]} />
-        <meshBasicMaterial color="#4da3ff" transparent opacity={0.32} depthWrite={false} />
+        <meshBasicMaterial
+          color={topFound ? '#7cc0ff' : '#4da3ff'}
+          transparent
+          opacity={topFound ? 0.6 : 0.32}
+          depthWrite={false}
+        />
       </mesh>
       <mesh position={[0, parcelTopMm / 1000 + 0.009, zc]}>
         <boxGeometry args={[w, 0.005, 0.005]} />
@@ -138,7 +150,12 @@ export function LineScanCaptureHighlight({
       {/* Bottom cross-belt scan plane at the belt surface */}
       <mesh position={[0, 0.002, zc]}>
         <boxGeometry args={[w, 0.01, dz]} />
-        <meshBasicMaterial color="#3fb950" transparent opacity={0.3} depthWrite={false} />
+        <meshBasicMaterial
+          color={bottomFound ? '#8ee6a1' : '#3fb950'}
+          transparent
+          opacity={bottomFound ? 0.55 : 0.3}
+          depthWrite={false}
+        />
       </mesh>
       {/* Revealed bottom optical gap: the exposed underside + bottom reader */}
       {exposed && (
