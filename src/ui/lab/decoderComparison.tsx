@@ -19,12 +19,21 @@ import {
   type SensorRoi,
 } from '../../pipeline/pixelDecoder';
 import type { LabReport } from './labReport';
+import { zxingDecodeFrame } from '../../pipeline/zxingDecoder';
+
+/** Pixel engines selectable in the experiment (t4-zxing). */
+export type PixelEngine = 'CUSTOM_TS' | 'ZXING_CPP';
 
 interface PixelProbeHandle {
   renderFullResFrame: (cameraId: string) =>
     | { frame: PixelFrame; roi: SensorRoi | undefined }
     | null;
 }
+
+const ENGINE_LABELS: Record<PixelEngine, string> = {
+  CUSTOM_TS: 'custom TS line-scanner',
+  ZXING_CPP: 'ZXing C++ (wasm)',
+};
 
 declare global {
   interface Window {
@@ -39,6 +48,8 @@ export interface PixelExperimentOutcome {
   frameWidthPx: number;
   frameHeightPx: number;
   candidateCount: number;
+  /** Engine that produced the pixel verdicts (t4-zxing). */
+  engine: PixelEngine;
   /** One pixel decode result per candidate, in candidate order. */
   pixel: PixelDecodeResult[];
 }
@@ -64,6 +75,7 @@ export function DecoderComparison({
   const [outcome, setOutcome] = useState<PixelExperimentOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [engine, setEngine] = useState<PixelEngine>('CUSTOM_TS');
 
   const labels = report?.labels ?? [];
   const candidateIds = new Set(
@@ -108,19 +120,29 @@ export function DecoderComparison({
     const { frame, candidates: cands } = applySensorRoi(probed.frame, probed.roi, allCands);
     setBusy(true);
     // Defer: let the button paint, then do the (GPU-syncing + decode) work.
-    queueMicrotask(() => {
-      const results = pixelDecodeFrame(frame, cands);
-      onExperiment();
-      setOutcome({
-        cameraId,
-        parcelId: parcel.parcelId,
-        simTimeMs,
-        frameWidthPx: frame.widthPx,
-        frameHeightPx: frame.heightPx,
-        candidateCount: cands.length,
-        pixel: results,
-      });
-      setBusy(false);
+    queueMicrotask(async () => {
+      try {
+        // t4-zxing: the ZXing C++ engine is a lazy-loaded wasm module.
+        const results =
+          engine === 'ZXING_CPP'
+            ? await zxingDecodeFrame(frame, cands)
+            : pixelDecodeFrame(frame, cands);
+        onExperiment();
+        setOutcome({
+          cameraId,
+          parcelId: parcel.parcelId,
+          simTimeMs,
+          frameWidthPx: frame.widthPx,
+          frameHeightPx: frame.heightPx,
+          candidateCount: cands.length,
+          engine,
+          pixel: results,
+        });
+        setBusy(false);
+      } catch (e) {
+        setError(`Pixel decode failed: ${e instanceof Error ? e.message : String(e)}`);
+        setBusy(false);
+      }
     });
   };
 
@@ -136,7 +158,9 @@ export function DecoderComparison({
       <p className="dc-banner" data-testid="dc-banner">
         Synthetic pixel experiment: renders the scene from this camera at
         full sensor resolution and decodes the bwip-js label textures from
-        raw pixels. Not a real-optics validation; off the capture path.
+        raw pixels. Two pixel engines: the custom TS line-scanner and ZXing
+        C++ (WebAssembly, lazy-loaded). Not a real-optics validation; off the
+        capture path.
       </p>
       <p className="dc-modes" data-testid="dc-modes">
         Geometry verdicts: <code>GEOMETRY_MODEL</code> · Pixel verdicts:{' '}
@@ -151,10 +175,22 @@ export function DecoderComparison({
         >
           {busy ? 'Decoding…' : 'Run pixel decode'}
         </button>
+        <label className="dc-engine" data-testid="dc-engine">
+          Pixel engine:{' '}
+          <select
+            value={engine}
+            onChange={(e) => setEngine(e.target.value as PixelEngine)}
+            data-testid="dc-engine-select"
+          >
+            <option value="CUSTOM_TS">{ENGINE_LABELS.CUSTOM_TS}</option>
+            <option value="ZXING_CPP">{ENGINE_LABELS.ZXING_CPP}</option>
+          </select>
+        </label>
         {outcome && (
           <span className="dc-frame-info">
-            frame {outcome.frameWidthPx}×{outcome.frameHeightPx} ·{' '}
-            {outcome.candidateCount} label(s) in frame · t={outcome.simTimeMs} ms
+            {ENGINE_LABELS[outcome.engine]} · frame {outcome.frameWidthPx}×
+            {outcome.frameHeightPx} · {outcome.candidateCount} label(s) in frame
+            · t={outcome.simTimeMs} ms
           </span>
         )}
       </div>

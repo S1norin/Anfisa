@@ -24,6 +24,7 @@ import { applyPresetToStore, getFaultScenario } from '../../presets';
 import { computeLabReport } from '../lab/labReport';
 import { LabControls } from '../lab/labControls';
 import { LabReportView } from '../lab/labReportView';
+import { DecoderComparison } from '../lab/decoderComparison';
 
 export function CameraLabView() {
   const sim = useSim();
@@ -87,6 +88,18 @@ export function CameraLabView() {
           </div>
           <div className="view-panel">
             <LabReportView report={report} hasParcel={parcel !== null} />
+            {/* On-demand pixel experiment (issue #17, t4-zxing): custom
+                TS decoder and ZXing C++ (wasm, lazy-loaded). */}
+            {report && parcel && (
+              <DecoderComparison
+                report={report}
+                parcel={parcel}
+                cameraId={rig?.id ?? null}
+                simTimeMs={state.simTimeMs}
+                frozen={frozen}
+                onExperiment={() => simStore.notePixelExperiment(state.simTimeMs)}
+              />
+            )}
           </div>
         </div>
         <div className="view-side">

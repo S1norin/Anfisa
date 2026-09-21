@@ -76,6 +76,11 @@ Controls include:
 - **Fault scenario buttons** — raise live fault conditions without a reset.
 - **Export / Import** — download the config JSON, full run record JSON,
   observation audit log, and metrics CSV; import a config JSON.
+- **Geometry vs pixel decoder** — synthetic experiment panel (issue #17):
+  renders the frozen frame at full sensor resolution and decodes the bwip-js
+  label textures from raw pixels with a selectable engine (custom TS
+  line-scanner, or ZXing C++ via WebAssembly — lazy-loaded), compared
+  label-by-label against the geometry verdicts.
 
 ### Schema
 
@@ -134,6 +139,29 @@ parcel crosses the scan plane, so each parcel leaves a deterministic
 The default preset ("Report layout · 4 oblique + top/bottom") implements
 the `Report Draft.md` geometry: four 9K area readers at 45° / 90° spacing,
 top + bottom line scanners, and a 100 mm conveyor gap for the bottom view.
+
+---
+
+## Pixel decoder experiment (issue #17, stretch)
+
+Camera Lab's *Geometry vs pixel decoder* panel decodes the app's own
+rendered label textures from raw pixels — a synthetic experiment, off the
+capture/decode hot path, stamped `processingMode: 'PIXEL_DECODER'` in every
+result (the capture path is always `GEOMETRY_MODEL`). Two engines:
+
+- **custom TS line-scanner** (`src/pipeline/pixelDecoder.ts`) — scans the
+  candidate quad and matches the bwip-js symbol table. Note: bwip emits a
+  legacy Code 128 with a position-weighted checksum that deviates from
+  ISO 15417, so this decoder mirrors bwip's table to read the app's labels.
+- **ZXing C++ (WebAssembly)** (`src/pipeline/zxingDecoder.ts`,
+  [`zxing-wasm`](https://www.npmjs.com/package/zxing-wasm)) — the standard
+  library reader, loaded lazily (`import('zxing-wasm/reader')`) so it never
+  touches startup. The wasm binary (~1 MiB, reader subpath) is self-hosted
+  at `public/zxing/zxing_reader.wasm` (browser) or instantiated from
+  `node_modules` in tests — deterministic, no network.
+
+Neither engine is a claim that real optics/noise handling works — see
+Limitations.
 
 ---
 

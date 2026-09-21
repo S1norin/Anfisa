@@ -157,6 +157,79 @@ body {
   overflow-y: auto;
 }
 
+/* Geometry vs pixel decoder experiment panel (issue #17, t4-zxing). */
+.decoder-comparison {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.decoder-comparison h3 {
+  margin-top: 0;
+}
+
+.decoder-comparison .dc-banner,
+.decoder-comparison .dc-modes {
+  margin: 6px 0;
+  font-size: 0.85em;
+  color: var(--text-dim);
+}
+
+.decoder-comparison .dc-modes code {
+  color: var(--text);
+}
+
+.decoder-comparison .dc-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.decoder-comparison .dc-engine select {
+  margin-left: 4px;
+  padding: 3px 6px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+
+.decoder-comparison .dc-frame-info {
+  font-size: 0.8em;
+  color: var(--text-dim);
+  font-family: ui-monospace, monospace;
+}
+
+.decoder-comparison .dc-error {
+  color: var(--err);
+  font-size: 0.85em;
+}
+
+.decoder-comparison .dc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+}
+
+.decoder-comparison .dc-table th,
+.decoder-comparison .dc-table td {
+  text-align: right;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--panel-border);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.decoder-comparison .dc-table th:first-child,
+.decoder-comparison .dc-table td:first-child {
+  text-align: left;
+}
+
 .op-card {
   background: var(--panel);
   border: 1px solid var(--panel-border);

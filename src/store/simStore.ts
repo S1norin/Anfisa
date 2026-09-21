@@ -40,6 +40,13 @@ export class SimStore {
    * same domain step — zero queueing delay.
    */
   private pipelineInstance = new ParcelPipeline();
+  /**
+   * Pixel experiments (issue #17, t4-zxing): on-demand decoder runs from
+   * the Camera Lab comparison panel. Off the capture path — they only
+   * record that a PIXEL_DECODER engine ran, never feed the pipeline.
+   */
+  private pixelExperimentCount = 0;
+  private pixelExperimentLastSimTimeMs = 0;
   /** Audit-level observation log for live metrics + camera wall. */
   private observations: RunObservationMeta[] = [];
   /** Cursor into the sim event log (append-only; rewinds on reset). */
@@ -67,6 +74,21 @@ export class SimStore {
   /** Processing events (PARCEL_FINALIZED / PARCEL_ACKED). */
   get pipelineEvents(): readonly SimEvent[] {
     return this.pipelineInstance.events;
+  }
+
+  /** How many on-demand pixel experiments ran this run (t4-zxing). */
+  get pixelExperiments(): { count: number; lastSimTimeMs: number } {
+    return {
+      count: this.pixelExperimentCount,
+      lastSimTimeMs: this.pixelExperimentLastSimTimeMs,
+    };
+  }
+
+  /** Stamp one completed pixel experiment (called by the Lab panel). */
+  notePixelExperiment(simTimeMs: number): void {
+    this.pixelExperimentCount += 1;
+    this.pixelExperimentLastSimTimeMs = simTimeMs;
+    this.notify();
   }
 
   get parcelsSpawned(): number {

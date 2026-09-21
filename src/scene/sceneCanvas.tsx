@@ -10,21 +10,28 @@ import { CameraRigScene, cameraRigToPerspective } from './cameraRig';
 import { ParcelScene } from './parcel';
 import { StationScene } from './stationScene';
 import { CaptureRenderer } from '../capture/captureRenderer';
+import { renderFullResFrame } from './pixelProbe';
 
 /**
  * Diagnostics probe: expose the WebGLRenderer on `window.__anfisa` so
  * perf/leak checks (NFR-003/004/005) can read renderer.info (memory,
- * draw calls) from outside React. Harmless in production; overwritten on
- * re-mount.
+ * draw calls) from outside React, and the on-demand full-resolution pixel
+ * probe on `window.__anfisaPixels` (issue #17, t4-zxing). Harmless in
+ * production; overwritten on re-mount.
  */
 function RendererProbe() {
   const state = useThree();
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>;
     w.__anfisa = { gl: state.gl, scene: state.scene, camera: state.camera };
+    w.__anfisaPixels = {
+      renderFullResFrame: (cameraId: string) =>
+        renderFullResFrame(state.gl, state.scene, cameraId),
+    };
     return () => {
       const cur = w.__anfisa as { gl?: unknown } | undefined;
       if (cur && cur.gl === state.gl) delete w.__anfisa;
+      delete w.__anfisaPixels;
     };
   });
   return null;
