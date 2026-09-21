@@ -63,6 +63,7 @@ import {
   Step7Association,
   ObservationTravelHighlight,
 } from './step7Association';
+import { Step8Result } from './step8Result';
 
 export type HiwMode = 'guided' | 'live';
 export type HiwViewPreset = 'orbit' | 'top' | 'side' | 'sensor';
@@ -393,6 +394,16 @@ function HiwImagePanel({
           Step 7 · assign reads to parcel
         </div>
         <Step7Association manifest={manifest} timeMs={timeMs} />
+      </section>
+    );
+  }
+  if (step.step === 8) {
+    return (
+      <section className="hiw-image-panel" data-testid="hiw-image-panel">
+        <div className="hiw-image-step" data-testid="image-panel-step">
+          Step 8 · final result
+        </div>
+        <Step8Result manifest={manifest} timeMs={timeMs} />
       </section>
     );
   }
