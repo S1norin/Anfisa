@@ -166,11 +166,22 @@ export function HowItWorksView() {
             <div className="how-technical" data-testid="technical-details">
               <p>
                 Line scans are encoder-synchronized: each line is captured at a
-                known encoder position (encoderStepMmPerLine), so the strip is
-                a deterministic (encoder, cross-belt) image of the parcel.
-                Association uses interval overlap of the parcel's encoder span
-                against the strip span; decode is a pure function of the
-                projected strip region (no GPU pixels).
+                known encoder position (encoderStepMmPerLine = 0.1 mm in the
+                report layout), so the strip is a deterministic (encoder,
+                cross-belt) image of the parcel. In the report layout the
+                top/bottom scanners image a 715 mm scan-plane FOV with 8192
+                pixels per line (≈ 0.0873 mm/px), which covers the 650 mm
+                belt with a 65 mm margin. The 0.35 mm barcode module spans
+                ≈ 4.0 line pixels across the belt and 3.5 encoder rows along
+                the travel. Association uses interval overlap of the
+                parcel's encoder span against the strip span; decode is a
+                pure function of the projected strip region (no GPU pixels).
+              </p>
+              <p>
+                The six side area cameras sit on a 60° direction ring (three
+                per conveyor side) at a 1450 mm working distance; upstream
+                centering guides keep the parcel within ±125 mm of the belt
+                centre, which bounds the worst-case face incidence to ≈ 30°.
               </p>
             </div>
           )}

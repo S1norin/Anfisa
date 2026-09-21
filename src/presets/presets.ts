@@ -103,9 +103,9 @@ export const PRESETS: readonly PresetDef[] = [
   },
   {
     id: 'draft-4-oblique',
-    name: 'Draft 4-oblique',
+    name: 'Draft 4-oblique (legacy demo)',
     description:
-      'Four elevated oblique readers at the parcel corners; no top/bottom. Cheaper layout, oblique incidence on every face.',
+      'Legacy demo layout — not the report geometry: four elevated oblique readers at the parcel corners; no top/bottom. Cheaper layout, oblique incidence on every face. Superseded by report-8reader (see REPORT_ALIGNMENT_PLAN.md).',
     category: 'RIG',
     build: (seed = DEFAULT_PRESET_SEED) => {
       const cfg = recommendedSixViewConfig();

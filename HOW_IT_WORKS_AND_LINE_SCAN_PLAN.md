@@ -4,6 +4,14 @@
 
 Planning document only. This document does not describe completed functionality.
 
+> **Superseded geometry note:** this plan predates the final report layout.
+> The four-oblique side readers described below were replaced by the
+> **report-8reader** layout — six side area cameras on a 60° direction ring
+> plus the top/bottom line scanners (715 mm FOV, 8192 px, 0.35 mm module,
+> 100 mm bottom gap). The current contract lives in
+> `src/report/reportSpec.ts` and `src/capture/presets.ts`
+> (`reportEightReaderConfig`). See `REPORT_ALIGNMENT_PLAN.md`.
+
 ## Goals
 
 1. Add a fifth **How It Works** tab that explains the physical conveyor flow and software pipeline step by step.

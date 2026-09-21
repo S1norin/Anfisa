@@ -1,17 +1,20 @@
 # Anfisa · Conveyor Barcode Station
 
 An interactive Three.js demo of a synthetic belt-conveyor barcode reading
-station. A stream of parcels travels a fixed belt past a six-camera rig:
-four oblique area readers plus two encoder-synced **line scanners** on the
-top and bottom faces. The app runs a **deterministic domain simulation +
+station. A stream of parcels travels a fixed belt past the final report's
+eight-reader rig: **six side area cameras** at 60° directions (three per
+conveyor side) plus two encoder-synced **line scanners** on the top and
+bottom faces. The app runs a **deterministic domain simulation +
 capture/decode pipeline** and renders the station, live camera feeds,
 per-parcel pipeline state, and run-level metrics.
 
 Everything on screen is **synthetic ground truth**, not a real camera feed.
-The purpose is to demo the station's measurement model and the fail-safe
+All displayed metrics are **synthetic regression numbers from the
+deterministic quality model — not measured optical performance**. The
+purpose is to demo the station's measurement model and the fail-safe
 pipeline behavior (association, quality gating, aggregation, no-read reasons)
-in a form a reviewer can poke at. A real PoC is still required for optical
-validation.
+in a form a reviewer can poke at. **A real optical PoC is still required
+before any of these numbers can be claimed as hardware performance.**
 
 The final report's numerical parameters (reader geometry, sensor sizes,
 sampling, working distances) are frozen in `src/report/reportSpec.ts` —
@@ -32,7 +35,7 @@ npm run dev        # http://localhost:5173  (Vite; the run auto-starts on load)
 Other commands:
 
 ```bash
-npm test           # vitest unit + deterministic e2e suites (480 tests)
+npm test           # vitest unit + deterministic e2e suites (595 tests)
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint
 npm run build      # typecheck + production bundle
@@ -55,8 +58,9 @@ parcels keep moving.
 - Central 3D station: orbit the camera, watch parcels travel the belt.
   Click a parcel to select it (click empty space to clear; it otherwise
   auto-follows the newest parcel).
-- Six-tile camera wall: live feed per camera with synchronized pipeline
-  metadata (frame time, parcel IDs in frame, decoded labels, warnings).
+- Responsive camera wall: one live tile per reader (eight in the report
+  layout) with synchronized pipeline metadata (frame time, parcel IDs in
+  frame, decoded labels, warnings).
 - Side panel: pipeline timeline, the selected parcel's result card, and live
   run metrics.
 
@@ -136,9 +140,15 @@ parcel crosses the scan plane, so each parcel leaves a deterministic
   parcel's encoder interval overlaps the strip's encoder span (interval
   overlap, same as area frames' temporal association).
 
-The default preset ("Report layout · 4 oblique + top/bottom") implements
-the `Report Draft.md` geometry: four 9K area readers at 45° / 90° spacing,
-top + bottom line scanners, and a 100 mm conveyor gap for the bottom view.
+The default preset, **report-8reader** ("Report layout · 6 side + 2 line
+(final)"), implements the final report geometry from
+`src/report/reportSpec.ts`: six 8000×4500 side area cameras on a 60°
+direction ring (55 mm lens, 1450 mm working distance, upstream centering
+guides keep the parcel within ±125 mm laterally), top + bottom line
+scanners with a 715 mm FOV over 8192 px (0.1 mm encoder step, 12 kHz
+line-rate ceiling), a 0.35 mm barcode module, and the 100 mm conveyor gap
+for the bottom view. The older `report-6view` (4 oblique + top/bottom) and
+`draft-4-oblique` presets are legacy layouts kept for comparison.
 
 ---
 
@@ -179,8 +189,10 @@ BOTTOM rigs into `LINE_SCAN` with the line block (`sensorWidthMm`,
 
 ## Five-minute walkthrough
 
-1. Open **Schema** and explain the belt, parcel axes, six views, the
-   side-grip bottom opening, and the sorter distance.
+1. Open **Schema** and explain the belt, parcel axes, the eight readers
+   (six side area cameras at 60° plus the top/bottom line scanners), the
+   100 mm bottom opening, the upstream centering guides, and the sorter
+   distance.
 2. Switch to **Operations**. Select a parcel and follow its ID through
    photoeye entry, camera frames, observations, aggregation, and ACK.
 3. Open the parcel result and point out multiple physical labels, including
@@ -200,16 +212,19 @@ BOTTOM rigs into `LINE_SCAN` with the line block (`sensorWidthMm`,
 
 ### Available presets (Camera Lab → Preset)
 
-Report layout · 4 oblique + top/bottom (default), Recommended 6-view, Draft
-4-oblique, Bottom gap transfer, Side-grip transfer, Glare stress,
-Small-module stress, Camera failure, Close spacing.
+**Report layout · 6 side + 2 line (final)** (default, `report-8reader`),
+Recommended 6-view, Bottom gap transfer, Side-grip transfer, Glare stress,
+Lateral offset stress, Small-module stress, Camera failure, Close spacing.
+Legacy: **Report layout · 4 oblique + top/bottom** (`report-6view`,
+superseded by report-8reader) and **Draft 4-oblique** (`draft-4-oblique`,
+demo layout — not the report geometry).
 
 ---
 
 ## Performance budget (NFR-001)
 
 Target: a 10-parcel run sustains **55–60 FPS** at presentation resolution
-with helpers hidden, and the six camera previews refresh at 5–10 visible
+with helpers hidden, and the eight reader previews refresh at 5–10 visible
 updates/s (NFR-002).
 
 How the budget is met:
@@ -220,7 +235,7 @@ How the budget is met:
 - The GPU camera preview render is throttled to **8 Hz** per camera. Logical
   captures stay at the camera's 20 Hz cadence (the geometry decode is
   texture-free); non-due frames reuse the last rendered texture. This stops
-  six full-scene renders from dominating the frame.
+  eight full-scene renders from dominating the frame.
 - Live metrics recompute at most every 250 ms of sim time.
 
 Verification:
