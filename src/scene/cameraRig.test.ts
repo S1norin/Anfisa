@@ -57,13 +57,15 @@ describe('line-scan rig layout (t8)', () => {
     expect(l.lineMarkerPosM[1]).toBe(0);
   });
 
-  it('scan plane sits exactly at scanPlaneZMm (mm → m at the boundary)', () => {
+  it('scan plane sits exactly at scanPlaneZMm at deck level (mm → m at the boundary)', () => {
     for (const role of ['TOP', 'BOTTOM'] as const) {
       const rig = lineRig(role);
       const l = lineRigLayout(rig);
       expect(l.scanPlanePosM[2]).toBeCloseTo(rig.line.scanPlaneZMm * 0.001, 9);
       expect(l.scanPlanePosM[0]).toBeCloseTo(rig.pose.positionMm[0] * 0.001, 9);
-      expect(l.scanPlanePosM[1]).toBeCloseTo(rig.pose.positionMm[1] * 0.001, 9);
+      // Deck level (belt top), matching the Schema view's line annotations —
+      // not the lens height.
+      expect(l.scanPlanePosM[1]).toBeCloseTo(0, 9);
       // The plane spans the sensor width, thin in the travel direction.
       expect(l.scanPlaneSizeM[0]).toBeCloseTo(rig.line.fovWidthMm * 0.001, 9);
       expect(l.scanPlaneSizeM[2]).toBeLessThan(l.scanPlaneSizeM[0]);

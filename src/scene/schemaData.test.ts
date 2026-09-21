@@ -4,7 +4,7 @@
  * functions of (config, parcel, rig) — tested without WebGL.
  */
 
-import { reportSixViewConfig } from '../capture/presets';
+import { reportEightReaderConfig, reportSixViewConfig } from '../capture/presets';
 import { defaultCameraRigs } from '../domain/camera';
 import { defaultConfig } from '../domain/config';
 import type {
@@ -23,6 +23,7 @@ import {
   rigVFovDeg,
   roiCorners,
   scanZones,
+  sideRingAnnotation,
   yawArc,
   type V3,
 } from './schemaData';
@@ -80,14 +81,15 @@ function makeParcel(over: Partial<ParcelState> = {}): ParcelState {
   };
 }
 
-describe('dimensionLines — the six key dimensions', () => {
-  it('returns all six line ids with config-driven extents', () => {
+describe('dimensionLines — the seven key dimensions', () => {
+  it('returns all seven line ids with config-driven extents', () => {
     const cfg = config();
     const lines = dimensionLines(cfg, null);
     const byId = Object.fromEntries(lines.map((l) => [l.id, l]));
     expect(Object.keys(byId).sort()).toEqual([
       'belt-width',
       'bottom-opening',
+      'bottom-working-distance',
       'sorter-distance',
       'station-length',
       'working-distance',
@@ -300,6 +302,44 @@ describe('line-scan annotations (t10)', () => {
     const a = lineScanAnnotations([withMoved])[0];
     expect(a.planeCorners.every((c) => Math.abs(c[2] - 300) <= 2)).toBe(true);
     expect(a.sub).toContain('plane Z 300 mm');
+  });
+});
+
+describe('t3-schema: report-8reader layout annotations', () => {
+  it('shows the 60° side ring with 30° worst-case and 1450 mm working distance', () => {
+    const cfg = reportEightReaderConfig();
+    const ring = sideRingAnnotation(cfg)!;
+    expect(ring).not.toBeNull();
+    expect(ring.label).toContain('60°');
+    expect(ring.label).toContain('6 directions');
+    expect(ring.sub).toContain('30°');
+    expect(ring.sub).toContain('1450 mm');
+    expect(ring.anglesDeg).toHaveLength(6);
+    expect(ring.radiusMm).toBeCloseTo(1650, 0);
+  });
+
+  it('top/bottom working distances are measured from the rig poses (150 mm / 100 mm)', () => {
+    const cfg = reportEightReaderConfig();
+    const parcel = makeParcel();
+    parcel.spec.heightMm = 400; // the report preset targets 400 mm parcels
+    const lines = dimensionLines(cfg, parcel);
+    const top = lines.find((d) => d.id === 'working-distance')!;
+    expect(top.label).toContain('150 mm');
+    const bottom = lines.find((d) => d.id === 'bottom-working-distance')!;
+    expect(bottom.label).toContain('100 mm');
+  });
+
+  it('line annotations report the 715 mm FOV, not the 41 mm physical sensor', () => {
+    const cfg = reportEightReaderConfig();
+    const anns = lineScanAnnotations(cfg.cameraRigs);
+    expect(anns).toHaveLength(2);
+    for (const a of anns) {
+      expect(a.sub).toContain('715 mm FOV');
+    }
+  });
+
+  it('returns null for non-ring layouts (recommended 6-view)', () => {
+    expect(sideRingAnnotation(reportSixViewConfig())).toBeNull();
   });
 });
 

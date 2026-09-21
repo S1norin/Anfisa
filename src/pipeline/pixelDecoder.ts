@@ -198,16 +198,22 @@ function quantize(len: number, module: number): number {
   return Math.min(4, Math.max(1, q));
 }
 
+/**
+ * Match a 6-run symbol. Forward: `cursor` is the symbol's leftmost (dark)
+ * run. Backward: `cursor` is the symbol's RIGHTMOST run — the key is still
+ * built in physical left-to-right run order ([cursor-5 .. cursor]), so the
+ * table keys (defined left-to-right) match in both directions.
+ */
 function matchSymbol(runs: Runs, cursor: number, direction: 1 | -1): number | undefined {
   for (let k = 0; k < 6; k++) {
-    const i = direction === 1 ? cursor + k : cursor - k;
+    const i = direction === 1 ? cursor + k : cursor - (5 - k);
     if (i < 0 || i >= runs.lens.length) return undefined;
     if (runs.isDark[i] !== (k % 2 === 0)) return undefined;
   }
   const module = estimateModule(runs.lens);
   const q: number[] = [];
   for (let k = 0; k < 6; k++) {
-    const i = direction === 1 ? cursor + k : cursor - k;
+    const i = direction === 1 ? cursor + k : cursor - (5 - k);
     q.push(quantize(runs.lens[i], module));
   }
   if (q.reduce((a, b) => a + b, 0) !== 11) return undefined;
@@ -245,7 +251,39 @@ function decodeRuns(runs: Runs, direction: 1 | -1): LineDecode {
   if (mode === undefined) return { failure: 'NO_START' };
 
   // 2) Walk symbols after the start until the stop; the symbol immediately
-  //    before the stop is the checksum symbol.
+  //    before the stop is the checksum symbol. The start search runs in the
+  //    scan direction (forward: leftmost start; backward: rightmost start —
+  //    the rescue path for quads clipped at the leading edge).
+  let startFound = false;
+  if (direction === 1) {
+    while (pos + 5 < runs.lens.length) {
+      if (runs.isDark[pos]) {
+        const v = matchSymbol(runs, pos, step);
+        if (v === CODE128_START_A || v === CODE128_START_B || v === CODE128_START_C) {
+          startVal = v;
+          mode = v === CODE128_START_B ? 'B' : v === CODE128_START_C ? 'C' : 'A';
+          startFound = true;
+          break;
+        }
+      }
+      pos += 1;
+    }
+  } else {
+    while (pos - 5 >= 0) {
+      if (runs.isDark[pos]) {
+        const v = matchSymbol(runs, pos, step);
+        if (v === CODE128_START_A || v === CODE128_START_B || v === CODE128_START_C) {
+          startVal = v;
+          mode = v === CODE128_START_B ? 'B' : v === CODE128_START_C ? 'C' : 'A';
+          startFound = true;
+          break;
+        }
+      }
+      pos -= 1;
+    }
+  }
+  if (!startFound) return { failure: 'NO_START' };
+
   const rest: number[] = [];
   let cursor = pos + 6 * step;
   let sawStop = false;
@@ -267,9 +305,11 @@ function decodeRuns(runs: Runs, direction: 1 | -1): LineDecode {
   }
   if (!sawStop || rest.length === 0) return { failure: 'NO_STOP' };
 
-  // 3) Checksum: (start + sum_i data[i]*i) mod 103, i = 1..n.
-  const check = rest[rest.length - 1];
-  const data = rest.slice(0, -1);
+  // 3) Checksum: (start + sum_i data[i]*i) mod 103, i = 1..n. Forward:
+  //    rest = [data[1..n], checksum]. Backward: rest = [checksum, data[n..1]]
+  //    (reversed back to position order before weighting).
+  const check = direction === 1 ? rest[rest.length - 1] : rest[0];
+  const data = direction === 1 ? rest.slice(0, -1) : rest.slice(1).reverse();
   let csum = startVal;
   for (let i = 0; i < data.length; i++) csum += data[i] * (i + 1);
   if (csum % 103 !== check) return { failure: 'CHECKSUM_FAIL' };
@@ -339,6 +379,61 @@ function decodeLine(frame: PixelFrame, quad: [number, number][], v: number): Lin
   return fwd.failure === 'NO_START' || fwd.failure === 'DEGENERATE' ? bwd : fwd;
 }
 
+/** Sensor ROI in pixel units (same shape as `SensorConfig.roi`). */
+export interface SensorRoi {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface RoiStageOutput {
+  /** Frame cropped to the ROI (the input frame when not cropped). */
+  frame: PixelFrame;
+  /** Candidates re-expressed in the cropped coordinate space. */
+  candidates: PixelLabelCandidate[];
+  /** True when the frame was cropped. */
+  cropped: boolean;
+}
+
+/**
+ * Explicit static mask stage (t4-pixel): crop the pixel frame to the rig's
+ * sensor ROI before candidate decoding and re-express the candidate quads
+ * in the cropped coordinate space. Candidates that fall outside the crop
+ * are KEPT — the decoder reports PIXEL:OUT_OF_FRAME for them, so an ROI
+ * that silently excludes a label becomes an auditable reason code, not
+ * metadata the decoder never sees. No ROI (or a full-sensor ROI) is a
+ * passthrough.
+ */
+export function applySensorRoi(
+  frame: PixelFrame,
+  roi: SensorRoi | undefined,
+  candidates: PixelLabelCandidate[],
+): RoiStageOutput {
+  if (!roi) return { frame, candidates, cropped: false };
+  const x0 = Math.max(0, Math.min(frame.widthPx, Math.round(roi.x)));
+  const y0 = Math.max(0, Math.min(frame.heightPx, Math.round(roi.y)));
+  const w = Math.max(0, Math.min(frame.widthPx - x0, Math.round(roi.width)));
+  const h = Math.max(0, Math.min(frame.heightPx - y0, Math.round(roi.height)));
+  if (w === 0 || h === 0) return { frame, candidates, cropped: false };
+  if (x0 === 0 && y0 === 0 && w === frame.widthPx && h === frame.heightPx) {
+    return { frame, candidates, cropped: false };
+  }
+  const data = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const src = ((y0 + y) * frame.widthPx + x0) * 4;
+    data.set(frame.data.subarray(src, src + w * 4), y * w * 4);
+  }
+  return {
+    frame: { data, widthPx: w, heightPx: h },
+    candidates: candidates.map((c) => ({
+      ...c,
+      quadPx: c.quadPx.map(([x, y]) => [x - x0, y - y0] as [number, number]),
+    })),
+    cropped: true,
+  };
+}
+
 export function pixelDecodeFrame(
   frame: PixelFrame,
   candidates: PixelLabelCandidate[],
@@ -350,19 +445,28 @@ export function pixelDecodeFrame(
       processingMode: 'PIXEL_DECODER',
       scanLines: SCAN_VS.length,
     };
-    // 1) Sanity: corners inside the frame and label wide enough.
+    // 1) Sanity: finite corners and real overlap with the frame. Corners
+    //    may stick OUT (partially clipped quads — the clipped region reads
+    //    as quiet zone via luminanceAt's out-of-bounds white); a fully
+    //    outside quad is rejected.
     const pts = cand.quadPx;
+    if (pts.length !== 4 || pts.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) {
+      out.push({
+        ...base,
+        decoded: false,
+        confidence: 0,
+        reasons: ['PIXEL:OUT_OF_FRAME'],
+        scanLinesDecoded: 0,
+      });
+      continue;
+    }
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
     if (
-      pts.length !== 4 ||
-      pts.some(
-        ([x, y]) =>
-          !Number.isFinite(x) ||
-          !Number.isFinite(y) ||
-          x < -0.5 ||
-          y < -0.5 ||
-          x > frame.widthPx + 0.5 ||
-          y > frame.heightPx + 0.5,
-      )
+      Math.max(...xs) < -0.5 ||
+      Math.min(...xs) > frame.widthPx + 0.5 ||
+      Math.max(...ys) < -0.5 ||
+      Math.min(...ys) > frame.heightPx + 0.5
     ) {
       out.push({
         ...base,

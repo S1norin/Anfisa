@@ -30,6 +30,7 @@ import {
   opticalAxes,
   roiCorners,
   scanZones,
+  sideRingAnnotation,
   yawArc,
   type V3,
 } from './schemaData';
@@ -458,8 +459,19 @@ export function SchemaScene({
         'sorter-distance',
         'parcel-size',
       ]),
-      SIDE: new Set(['station-length', 'working-distance', 'sorter-distance']),
-      FRONT: new Set(['belt-width', 'working-distance', 'bottom-opening', 'parcel-size']),
+      SIDE: new Set([
+        'station-length',
+        'working-distance',
+        'bottom-working-distance',
+        'sorter-distance',
+      ]),
+      FRONT: new Set([
+        'belt-width',
+        'working-distance',
+        'bottom-working-distance',
+        'bottom-opening',
+        'parcel-size',
+      ]),
       ISO: new Set(dims.map((d) => d.id)),
     };
     return dims.filter((d) => byPreset[presetName].has(d.id));
@@ -467,6 +479,20 @@ export function SchemaScene({
   const zones = useMemo(() => scanZones(config.cameraRigs), [config.cameraRigs]);
   const axes = useMemo(() => opticalAxes(config.cameraRigs), [config.cameraRigs]);
   const lineAnns = useMemo(() => lineScanAnnotations(config.cameraRigs), [config.cameraRigs]);
+  const sideRing = useMemo(() => sideRingAnnotation(config), [config]);
+  const ringPoints = useMemo(() => {
+    if (!sideRing) return [] as [number, number, number][];
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i <= 64; i++) {
+      const a = (i / 64) * Math.PI * 2;
+      pts.push([
+        mmToM(sideRing.center[0] + sideRing.radiusMm * Math.sin(a)),
+        mmToM(sideRing.center[1]),
+        mmToM(sideRing.center[2] + sideRing.radiusMm * Math.cos(a)),
+      ]);
+    }
+    return pts;
+  }, [sideRing]);
   const labelGroups = useMemo(
     () => (parcel ? labelAnnotationGroups(config, parcel) : []),
     [config, parcel],
@@ -520,6 +546,19 @@ export function SchemaScene({
           visibleDims.map((d) => (
             <DimensionLine key={d.id} from={d.from} to={d.to} label={d.label} />
           ))}
+
+        {/* Side-reader ring (report-8reader): 60° spacing, 30° worst case. */}
+        {toggles.dimensions && sideRing && (
+          <group>
+            <Line points={ringPoints} color="#ffb020" lineWidth={1.5} transparent opacity={0.8} />
+            <TextSprite
+              position={[sideRing.center[0], sideRing.center[1] + 0.25, sideRing.center[2]]}
+              text={sideRing.label}
+              sub={sideRing.sub}
+              height={0.12}
+            />
+          </group>
+        )}
 
         {toggles.frusta &&
           config.cameraRigs.map((rig) =>

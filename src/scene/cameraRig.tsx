@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import { frustumCornersMm, sensorIntrinsics } from '../domain/camera';
+import { frustumCornersMm, quatRotate, sensorIntrinsics } from '../domain/camera';
 import type {
   AreaScanCameraConfig,
   CameraConfig,
@@ -93,7 +93,11 @@ export interface LineRigLayout {
   lineMarkerPosM: [number, number, number];
   /** Thin scan plane size (m) in world space. */
   scanPlaneSizeM: [number, number, number];
-  /** Thin scan plane position in world space (m), Z = scanPlaneZMm. */
+  /**
+   * Thin scan plane position in world space (m): belt centreline X, deck
+   * level Y (the scanned surface line marker — same convention as the
+   * Schema view's line annotations), Z = scanPlaneZMm.
+   */
   scanPlanePosM: [number, number, number];
   /** Fixed mesh count: housing + marker + plane. */
   meshCount: number;
@@ -109,23 +113,50 @@ export function lineRigLayout(rig: LineScanCameraConfig): LineRigLayout {
     lineMarkerM: [0.012, w, 0.004],
     lineMarkerPosM: [0, 0, -(depth / 2 + 0.002)],
     scanPlaneSizeM: [w, 0.012, 0.004],
-    scanPlanePosM: [
-      rig.pose.positionMm[0] * MM,
-      rig.pose.positionMm[1] * MM,
-      rig.line.scanPlaneZMm * MM,
-    ],
+    scanPlanePosM: [rig.pose.positionMm[0] * MM, 0, rig.line.scanPlaneZMm * MM],
     meshCount: 3,
   };
 }
+
+/** Lens → working-target segment in metres (world space). */
+export interface WorkingDistanceSegment {
+  from: [number, number, number];
+  to: [number, number, number];
+}
+
+/**
+ * A rig's working-distance segment: area rigs run lens → focus point along
+ * the optical axis (the 8-reader side readers read 1450 mm this way); line
+ * rigs run lens → scan-plane centre at deck level (the 8-reader bottom
+ * reader reads 100 mm, its transfer-gap working distance).
+ */
+export function workingDistanceSegment(rig: CameraConfig): WorkingDistanceSegment {
+  const from: [number, number, number] = [
+    rig.pose.positionMm[0] * MM,
+    rig.pose.positionMm[1] * MM,
+    rig.pose.positionMm[2] * MM,
+  ];
+  if (rig.kind === 'AREA_SCAN') {
+    const fwd = quatRotate(rig.pose.quaternion, [0, 0, 1]);
+    const d = rig.acquisition.focusDistanceMm * MM;
+    return { from, to: [from[0] + fwd[0] * d, from[1] + fwd[1] * d, from[2] + fwd[2] * d] };
+  }
+  return { from, to: [from[0], 0, rig.line.scanPlaneZMm * MM] };
+}
+
+/** WD indicator rod radius (m). */
+export const WD_INDICATOR_RADIUS_M = 0.004;
 
 interface RigMeshProps {
   rig: CameraConfig;
   state: CameraState;
   selected: boolean;
   onSelect: (id: string) => void;
+  /** Draw the lens → working-target rod (world space). */
+  showWorkingDistance: boolean;
 }
 
-function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
+function RigMesh({ rig, state, selected, onSelect, showWorkingDistance }: RigMeshProps) {
   const body = useMemo(() => new THREE.BoxGeometry(...AREA_RIG_LAYOUT.bodyM), []);
   const lens = useMemo(() => new THREE.CylinderGeometry(...AREA_RIG_LAYOUT.lensM), []);
   useEffect(
@@ -230,6 +261,8 @@ function RigMesh({ rig, state, selected, onSelect }: RigMeshProps) {
           onSelect={select}
         />
       )}
+      {/* Working-distance rod: lens → focus point (area) / plane centre (line). */}
+      {showWorkingDistance && <WorkingDistanceIndicator rig={rig} stateColor={color} />}
     </group>
   );
 }
@@ -260,14 +293,52 @@ function LineScanPlaneMarker({
   );
 }
 
+/**
+ * Working-distance indicator: a thin rod from the lens to the rig's
+ * working target (focus point / scan-plane centre), world space. Drawn
+ * per rig only when `showWorkingDistances` is on.
+ */
+function WorkingDistanceIndicator({ rig, stateColor }: { rig: CameraConfig; stateColor: string }) {
+  const { from, to } = workingDistanceSegment(rig);
+  const dirX = to[0] - from[0];
+  const dirY = to[1] - from[1];
+  const dirZ = to[2] - from[2];
+  const length = Math.hypot(dirX, dirY, dirZ) || 1;
+  const quat = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(dirX / length, dirY / length, dirZ / length),
+  );
+  return (
+    <mesh
+      position={[
+        (from[0] + to[0]) / 2,
+        (from[1] + to[1]) / 2,
+        (from[2] + to[2]) / 2,
+      ]}
+      quaternion={[quat.x, quat.y, quat.z, quat.w]}
+    >
+      <cylinderGeometry args={[WD_INDICATOR_RADIUS_M, WD_INDICATOR_RADIUS_M, length, 8]} />
+      <meshBasicMaterial color={stateColor} transparent opacity={0.55} />
+    </mesh>
+  );
+}
+
 export interface CameraRigSceneProps {
   rigs: CameraConfig[];
   states: Record<string, CameraState>;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Draw a lens → working-target rod per rig (working distance). */
+  showWorkingDistances?: boolean;
 }
 
-export function CameraRigScene({ rigs, states, selectedId, onSelect }: CameraRigSceneProps) {
+export function CameraRigScene({
+  rigs,
+  states,
+  selectedId,
+  onSelect,
+  showWorkingDistances = false,
+}: CameraRigSceneProps) {
   return (
     <>
       {rigs.map((r) => (
@@ -277,6 +348,7 @@ export function CameraRigScene({ rigs, states, selectedId, onSelect }: CameraRig
           state={states[r.id] ?? 'OFFLINE'}
           selected={r.id === selectedId}
           onSelect={onSelect}
+          showWorkingDistance={showWorkingDistances}
         />
       ))}
     </>

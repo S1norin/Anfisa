@@ -58,6 +58,8 @@ export interface SceneCanvasProps {
   onSelectParcel?: (id: string | null) => void;
   /** Render through the selected physical rig instead of the orbit camera. */
   cameraView?: boolean;
+  /** Draw a lens → working-target rod on every rig (working distance). */
+  showWorkingDistances?: boolean;
 }
 
 function RigViewCamera({ rig }: { rig: SimConfig['cameraRigs'][number] }) {
@@ -111,6 +113,7 @@ export function SceneCanvas({
   selectedParcelId = null,
   onSelectParcel,
   cameraView = false,
+  showWorkingDistances = true,
 }: SceneCanvasProps) {
   const selectedParcel = parcels.find((p) => p.parcelId === selectedParcelId) ?? null;
   const selectedCamera =
@@ -146,6 +149,7 @@ export function SceneCanvas({
           }
           selectedId={selectedCameraId}
           onSelect={onSelectCamera ?? (() => undefined)}
+          showWorkingDistances={showWorkingDistances}
         />
       )}
       {parcels.map((p) => (

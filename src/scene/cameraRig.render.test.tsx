@@ -6,9 +6,13 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
-import { reportSixViewConfig } from '../capture/presets';
+import { reportEightReaderConfig, reportSixViewConfig } from '../capture/presets';
 import type { CameraConfig, CameraState, LineScanCameraConfig } from '../domain/types';
-import { CameraRigScene, rigStateColor } from './cameraRig';
+import {
+  CameraRigScene,
+  rigStateColor,
+  workingDistanceSegment,
+} from './cameraRig';
 
 function lineRig(role: 'TOP' | 'BOTTOM'): LineScanCameraConfig {
   const cfg = reportSixViewConfig();
@@ -174,5 +178,114 @@ describe('rendered area rig is unchanged (t8)', () => {
 
     click(rigMeshes[0]);
     expect(onSelect).toHaveBeenCalledWith(rig.id);
+  });
+});
+
+describe('rendered report-8reader rigs (t3-rig)', () => {
+  const cfg = reportEightReaderConfig();
+  const rigs = cfg.cameraRigs;
+  const states = Object.fromEntries(rigs.map((r) => [r.id, 'IDLE' as CameraState]));
+
+  function renderAll(showWorkingDistances: boolean) {
+    const { container } = render(
+      <CameraRigScene
+        rigs={rigs}
+        states={states}
+        selectedId={null}
+        onSelect={() => {}}
+        showWorkingDistances={showWorkingDistances}
+      />,
+    );
+    const outers = [...container.querySelectorAll(':scope > group')];
+    return {
+      container,
+      outers,
+      localMeshes: (outer: Element) =>
+        [...outer.querySelector(':scope > group')!.querySelectorAll(':scope > mesh')],
+      worldBoxes: (outer: Element) =>
+        [...outer.querySelectorAll(':scope > mesh')].filter((m) =>
+          m.querySelector(':scope > boxgeometry'),
+        ),
+      worldCylinders: (outer: Element) =>
+        [...outer.querySelectorAll(':scope > mesh')].filter((m) =>
+          m.querySelector(':scope > cylindergeometry'),
+        ),
+    };
+  }
+
+  it('mounts all eight rigs from reportEightReaderConfig (6 area + 2 line)', () => {
+    expect(rigs).toHaveLength(8);
+    const { outers, localMeshes, worldBoxes } = renderAll(false);
+    // One outer group per rig, in config order.
+    expect(outers).toHaveLength(8);
+
+    for (const [rig, outer] of rigs.map((r, i) => [r, outers[i]] as const)) {
+      // Housing + lens (area) / housing + line marker (line): 2 local meshes.
+      expect(localMeshes(outer)).toHaveLength(2);
+      // Area rigs render their frustum as a primitive; line rigs the world
+      // scan plane as a box (never both).
+      if (rig.kind === 'AREA_SCAN') {
+        expect(outer.querySelector('primitive')).not.toBeNull();
+        expect(worldBoxes(outer)).toHaveLength(0);
+      } else {
+        expect(worldBoxes(outer)).toHaveLength(1);
+      }
+    }
+  });
+
+  it('line scan planes span the 715 mm FOV width at deck level, Z = scanPlaneZMm', () => {
+    const { outers, worldBoxes } = renderAll(false);
+    for (const [rig, outer] of rigs.map((r, i) => [r, outers[i]] as const)) {
+      if (rig.kind !== 'LINE_SCAN') continue;
+      const plane = worldBoxes(outer)[0];
+      const args = plane
+        .querySelector(':scope > boxgeometry')!
+        .getAttribute('args')!
+        .split(',')
+        .map(Number);
+      expect(args[0]).toBeCloseTo(rig.line.fovWidthMm * 0.001, 9); // 715 mm
+      const pos = (plane.getAttribute('position') ?? '0,0,0')
+        .split(',')
+        .map(Number);
+      expect(pos[1]).toBeCloseTo(0, 9); // deck level
+      expect(pos[2]).toBeCloseTo(rig.line.scanPlaneZMm * 0.001, 9);
+    }
+  });
+
+  it('working-distance rods: 1450 mm side readers, 100 mm bottom gap, off by default', () => {
+    // Off by default: no indicator rods.
+    const off = renderAll(false);
+    for (const outer of off.outers) expect(off.worldCylinders(outer)).toHaveLength(0);
+
+    const { outers, worldCylinders } = renderAll(true);
+    for (const [rig, outer] of rigs.map((r, i) => [r, outers[i]] as const)) {
+      const rods = worldCylinders(outer);
+      expect(rods).toHaveLength(1);
+      const h = rods[0]
+        .querySelector(':scope > cylindergeometry')!
+        .getAttribute('args')!
+        .split(',')
+        .map(Number)[2];
+      const seg = workingDistanceSegment(rig);
+      const segLen = Math.hypot(
+        seg.to[0] - seg.from[0],
+        seg.to[1] - seg.from[1],
+        seg.to[2] - seg.from[2],
+      );
+      expect(h).toBeCloseTo(segLen, 9);
+      if (rig.kind === 'AREA_SCAN') {
+        // The 8-reader side working distance (focus distance), not a layout constant.
+        expect(h).toBeCloseTo(1.45, 9);
+      }
+    }
+    // Bottom line reader: lens (−100 mm) → deck: exactly the 100 mm gap.
+    const bottom = rigs.find((r) => r.role === 'BOTTOM')!;
+    const bottomOuter = outers[rigs.indexOf(bottom)];
+    const bottomH = worldCylinders(bottomOuter)[0]
+      .querySelector(':scope > cylindergeometry')!
+      .getAttribute('args')!
+      .split(',')
+      .map(Number)[2];
+    expect(bottomH).toBeCloseTo(0.1, 9);
   });
 });

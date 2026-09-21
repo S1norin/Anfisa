@@ -80,15 +80,30 @@ export function dimensionLines(
     labelOffset: [-140, -60, 0],
   });
 
-  // 3. Working distance — top camera lens to belt top (vertical).
+  // 3. Working distance — measured from the rig poses: top lens → parcel
+  // top face (belt top without a parcel), bottom lens → belt top. The
+  // report-8reader preset reads 150 mm / 100 mm this way.
   const topRig = cfg.cameraRigs.find((r) => r.role === 'TOP');
   if (topRig) {
+    const targetY = parcel ? parcel.spec.heightMm : 0;
+    const wd = Math.round(topRig.pose.positionMm[1] - targetY);
     lines.push({
       id: 'working-distance',
-      label: `Working distance — ${d.workingDistanceMm} mm`,
+      label: `Top working distance — ${wd} mm`,
       from: [...topRig.pose.positionMm] as V3,
-      to: [topRig.pose.positionMm[0], 0, mid],
-      labelOffset: [160, d.workingDistanceMm / 2, 0],
+      to: [topRig.pose.positionMm[0], targetY, mid],
+      labelOffset: [160, wd / 2, 0],
+    });
+  }
+  const bottomRig = cfg.cameraRigs.find((r) => r.role === 'BOTTOM');
+  if (bottomRig) {
+    const wd = Math.round(Math.abs(bottomRig.pose.positionMm[1]));
+    lines.push({
+      id: 'bottom-working-distance',
+      label: `Bottom working distance — ${wd} mm`,
+      from: [...bottomRig.pose.positionMm] as V3,
+      to: [bottomRig.pose.positionMm[0], 0, mid],
+      labelOffset: [-160, -wd / 2, 0],
     });
   }
 
@@ -266,11 +281,67 @@ export function lineScanAnnotations(rigs: CameraConfig[]): LineScanAnnotation[] 
       return {
         rigId: rig.id,
         label: `${rig.id} · ${rig.role} — line scan`,
-        sub: `${rig.line.fovWidthMm} mm FOV · ${rig.line.pixelsPerLine} px/line · plane Z ${rig.line.scanPlaneZMm} mm`,
+        sub: `${Math.round(rig.line.fovWidthMm)} mm FOV · ${rig.line.pixelsPerLine} px/line · plane Z ${rig.line.scanPlaneZMm} mm`,
         planeCorners: [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)],
         axis: { from: [...p] as V3, to: center },
       };
     });
+}
+
+/**
+ * The report-8reader layout: six side area readers on a common horizontal
+ * circle around the belt centreline, 60° apart — the 60° spacing and the
+ * 30° worst-case face incidence are the report's headline geometry, so the
+ * Schema view draws the ring with those numbers.
+ *
+ * Returns null for layouts that are not a common-radius, common-height
+ * even ring (i.e. every other preset).
+ */
+export interface SideRingAnnotation {
+  id: string;
+  label: string;
+  sub: string;
+  /** Ring centre (belt centreline at station mid, ring height), mm. */
+  center: V3;
+  radiusMm: number;
+  /** Direction of each side reader, deg from +z toward +x, ascending. */
+  anglesDeg: number[];
+}
+
+export function sideRingAnnotation(cfg: SimConfig): SideRingAnnotation | null {
+  const mid = cfg.station.lengthMm / 2;
+  const rigs = cfg.cameraRigs.filter(
+    (r): r is AreaScanCameraConfig => r.enabled && r.kind === 'AREA_SCAN',
+  );
+  // >=5: the report-8reader layout (6); the 6-view's 4 cameras also form an
+  // even square, but legacy presets keep their existing annotation set.
+  if (rigs.length < 5) return null;
+  const radii = rigs.map((r) => Math.hypot(r.pose.positionMm[0], r.pose.positionMm[2] - mid));
+  const ys = new Set(rigs.map((r) => Math.round(r.pose.positionMm[1])));
+  if (Math.max(...radii) - Math.min(...radii) > 1 || ys.size > 1) return null;
+  const anglesDeg = rigs
+    .map((r) => {
+      const deg = (Math.atan2(r.pose.positionMm[0], r.pose.positionMm[2] - mid) * 180) / Math.PI;
+      return (deg + 360) % 360;
+    })
+    .sort((a, b) => a - b);
+  const spacings: number[] = [];
+  for (let i = 1; i < anglesDeg.length; i++) spacings.push(anglesDeg[i] - anglesDeg[i - 1]);
+  spacings.push(360 - anglesDeg[anglesDeg.length - 1] + anglesDeg[0]);
+  if (!spacings.every((s) => Math.abs(s - spacings[0]) < 0.5)) return null;
+  const spacing = Math.round(spacings[0] * 10) / 10;
+  const worst = Math.round(spacings[0] / 2);
+  const wd = Math.round(rigs[0].acquisition.focusDistanceMm);
+  return {
+    id: 'side-ring',
+    label: `Side readers — ${rigs.length} directions, ${spacing}° apart`,
+    sub: `worst-case incidence ${worst}° · working distance ${wd} mm · ring radius ${Math.round(
+      radii[0],
+    )} mm`,
+    center: [0, rigs[0].pose.positionMm[1], mid],
+    radiusMm: radii[0],
+    anglesDeg,
+  };
 }
 
 /**

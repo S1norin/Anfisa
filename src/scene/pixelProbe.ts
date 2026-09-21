@@ -16,18 +16,26 @@
  */
 import * as THREE from 'three';
 import { simStore } from '../store/simStore';
-import type { PixelFrame } from '../pipeline/pixelDecoder';
+import type { PixelFrame, SensorRoi } from '../pipeline/pixelDecoder';
 import { cameraRigToPerspective } from './cameraRig';
+
+export interface FullResProbeFrame {
+  frame: PixelFrame;
+  /** The rig's static mask (undefined when the rig has no ROI). */
+  roi: SensorRoi | undefined;
+}
 
 /**
  * Render the current scene from `cameraId` at the rig's sensor size and
- * return the pixels (RGBA, row-major). Null when the rig is unknown.
+ * return the pixels (RGBA, row-major) plus the rig's sensor ROI (the
+ * explicit mask stage for the pixel path, t4-pixel). Null when the rig
+ * is unknown.
  */
 export function renderFullResFrame(
   gl: THREE.WebGLRenderer,
   scene: THREE.Scene,
   cameraId: string,
-): PixelFrame | null {
+): FullResProbeFrame | null {
   const rig = simStore.sim.state.config.cameraRigs.find((r) => r.id === cameraId);
   // Full-res pixel probes are area-scan only; line scanners decode from
   // domain strip data (no pixels).
@@ -49,5 +57,8 @@ export function renderFullResFrame(
   const data = new Uint8Array(w * h * 4);
   gl.readRenderTargetPixels(rt, 0, 0, w, h, data);
   rt.dispose();
-  return { data, widthPx: w, heightPx: h };
+  return {
+    frame: { data, widthPx: w, heightPx: h },
+    roi: rig.sensor.roi,
+  };
 }
