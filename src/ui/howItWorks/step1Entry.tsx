@@ -31,8 +31,9 @@ export function hasCrossedPhotoeye(keyframes: KeyframeLike, tMs: number): boolea
  * Step 1 highlights the entry photoeye; step 2 highlights the line-scan
  * capture (scan planes glow while the box crosses, bottom gap revealed);
  * step 4 the decoding reader; step 5 the six side cameras; step 6 keeps
- * the selected side camera with the parcel pose FROZEN; later steps land
- * their highlights with their content tasks.
+ * the selected side camera with the parcel pose FROZEN; step 7 the
+ * observation cards travel toward the parcel; later steps land their
+ * highlights with their content tasks.
  */
 export function sceneHighlightAt(
   manifest: ReplayManifest,
@@ -43,12 +44,14 @@ export function sceneHighlightAt(
   | 'line-scan-decode'
   | 'side-cameras'
   | 'side-prep-frozen'
+  | 'observation-travel'
   | null {
   const idx = stepIndexAt(manifest.steps, manifest.durationMs, tMs);
   if (manifest.steps[idx].sensorIds.includes('photoeye-entry')) return 'photoeye-entry';
   if (decodeHighlightAt(manifest, tMs)) return 'line-scan-decode';
   if (sideCapturesAt(manifest, tMs)) return 'side-cameras';
   if (manifest.steps[idx].step === 6) return 'side-prep-frozen';
+  if (manifest.steps[idx].step === 7) return 'observation-travel';
   return lineScanHighlightAt(manifest, tMs) ? 'line-scan' : null;
 }
 

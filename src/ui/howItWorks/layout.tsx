@@ -59,6 +59,10 @@ import {
   Step6SidePrep,
   frozenFrontZAt,
 } from './step6SidePrep';
+import {
+  Step7Association,
+  ObservationTravelHighlight,
+} from './step7Association';
 
 export type HiwMode = 'guided' | 'live';
 export type HiwViewPreset = 'orbit' | 'top' | 'side' | 'sensor';
@@ -275,6 +279,13 @@ function HiwScenePanel({
       {(highlight === 'side-cameras' || highlight === 'side-prep-frozen') && (
         <SideCameraCaptureHighlight selectedId={sideCamId} />
       )}
+      {highlight === 'observation-travel' && (
+        <ObservationTravelHighlight
+          manifest={manifest}
+          timeMs={timeMs}
+          parcelFrontZMm={parcel.frontZMm}
+        />
+      )}
       {view === 'orbit' ? (
         <>
           <gridHelper args={[8, 40, '#2f3740', '#222831']} position={[0, -0.8, 1.1]} />
@@ -372,6 +383,16 @@ function HiwImagePanel({
           timeMs={timeMs}
           selectedId={sideCamId}
         />
+      </section>
+    );
+  }
+  if (step.step === 7) {
+    return (
+      <section className="hiw-image-panel" data-testid="hiw-image-panel">
+        <div className="hiw-image-step" data-testid="image-panel-step">
+          Step 7 · assign reads to parcel
+        </div>
+        <Step7Association manifest={manifest} timeMs={timeMs} />
       </section>
     );
   }

@@ -1979,6 +1979,75 @@ body {
   font-size: 0.85em;
 }
 
+/* ---- Step 7: association (t6-1) ---- */
+
+.step7-assoc {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step7-caption {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+.step7-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.step7-head,
+.step7-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1.4fr 1fr 1.4fr 1.3fr;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 0.78em;
+  font-family: var(--mono, monospace);
+}
+
+.step7-head {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--panel-border);
+  border-radius: 0;
+  padding-bottom: 6px;
+}
+
+.step7-row {
+  border: 1px solid var(--panel-border);
+  background: #0d1117;
+}
+
+.step7-row-rejected {
+  border-color: #e3a008;
+}
+
+.step7-no-read {
+  color: #e3a008;
+}
+
+.step7-row [data-testid='obs-verdict'] {
+  color: #7ee787;
+}
+
+.step7-row [data-testid='obs-verdict'][data-ok='false'] {
+  color: #e3a008;
+}
+
+.step7-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.78em;
+}
+
 /* ---- Step 3: line-scan preparation stages (t3-3) ---- */
 
 .step3-prep {
