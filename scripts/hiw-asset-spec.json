@@ -1,0 +1,932 @@
+{
+  "schemaVersion": 1,
+  "fixtures": {
+    "success": {
+      "schemaVersion": 1,
+      "fixtureId": "success",
+      "parcel": {
+        "parcelId": "PARCEL-2026-0001",
+        "label": "Sample parcel (clean reads)",
+        "labels": [
+          {
+            "labelInstanceId": "L-top",
+            "face": "TOP",
+            "payload": "A1F4-2026-0001"
+          },
+          {
+            "labelInstanceId": "L-side",
+            "face": "FRONT",
+            "payload": "B7K9-2026-0042"
+          }
+        ]
+      },
+      "durationMs": 60000,
+      "keyframes": [
+        {
+          "tMs": 0,
+          "frontZMm": -150,
+          "encoderMm": -150
+        },
+        {
+          "tMs": 7500,
+          "frontZMm": -40,
+          "encoderMm": -40
+        },
+        {
+          "tMs": 15000,
+          "frontZMm": 320,
+          "encoderMm": 320
+        },
+        {
+          "tMs": 22500,
+          "frontZMm": 450,
+          "encoderMm": 450
+        },
+        {
+          "tMs": 30000,
+          "frontZMm": 450,
+          "encoderMm": 450
+        },
+        {
+          "tMs": 37500,
+          "frontZMm": 800,
+          "encoderMm": 800
+        },
+        {
+          "tMs": 45000,
+          "frontZMm": 950,
+          "encoderMm": 950
+        },
+        {
+          "tMs": 52500,
+          "frontZMm": 1200,
+          "encoderMm": 1200
+        },
+        {
+          "tMs": 60000,
+          "frontZMm": 1400,
+          "encoderMm": 1400
+        }
+      ],
+      "sensors": [
+        {
+          "id": "photoeye-entry",
+          "kind": "AREA_CAMERA",
+          "face": "TOP"
+        },
+        {
+          "id": "ls-top",
+          "kind": "LINE_SCAN",
+          "face": "TOP"
+        },
+        {
+          "id": "ls-bottom",
+          "kind": "LINE_SCAN",
+          "face": "BOTTOM"
+        },
+        {
+          "id": "cam-side-1",
+          "kind": "AREA_CAMERA",
+          "face": "FRONT"
+        },
+        {
+          "id": "cam-side-2",
+          "kind": "AREA_CAMERA",
+          "face": "RIGHT"
+        },
+        {
+          "id": "cam-side-3",
+          "kind": "AREA_CAMERA",
+          "face": "RIGHT"
+        },
+        {
+          "id": "cam-side-4",
+          "kind": "AREA_CAMERA",
+          "face": "REAR"
+        },
+        {
+          "id": "cam-side-5",
+          "kind": "AREA_CAMERA",
+          "face": "LEFT"
+        },
+        {
+          "id": "cam-side-6",
+          "kind": "AREA_CAMERA",
+          "face": "LEFT"
+        }
+      ],
+      "captures": [
+        {
+          "captureId": "cap-ls-top-01",
+          "sensorId": "ls-top",
+          "kind": "LINE_SCAN",
+          "parcelId": "PARCEL-2026-0001",
+          "simTimeMs": 12000,
+          "encoderSpanMm": [
+            200,
+            320
+          ],
+          "stages": [
+            {
+              "stage": "raw",
+              "path": "hiw/assets/success/cap-ls-top-01/raw.png"
+            },
+            {
+              "stage": "maskedCrop",
+              "path": "hiw/assets/success/cap-ls-top-01/maskedCrop.png"
+            },
+            {
+              "stage": "grayscaleContrast",
+              "path": "hiw/assets/success/cap-ls-top-01/grayscaleContrast.png"
+            },
+            {
+              "stage": "edgeMap",
+              "path": "hiw/assets/success/cap-ls-top-01/edgeMap.png"
+            },
+            {
+              "stage": "candidateOverlay",
+              "path": "hiw/assets/success/cap-ls-top-01/candidateOverlay.png"
+            },
+            {
+              "stage": "rectifiedCrop",
+              "path": "hiw/assets/success/cap-ls-top-01/rectifiedCrop.png"
+            }
+          ],
+          "candidate": {
+            "labelInstanceId": "L-top",
+            "source": "pixels",
+            "quadPx": [
+              [
+                85,
+                61
+              ],
+              [
+                486,
+                61
+              ],
+              [
+                486,
+                479
+              ],
+              [
+                85,
+                479
+              ]
+            ]
+          },
+          "decodeCropPath": "hiw/assets/success/cap-ls-top-01/decode-crop.png",
+          "expectedDecode": {
+            "decoded": true,
+            "payload": "A1F4-2026-0001",
+            "reasons": []
+          }
+        },
+        {
+          "captureId": "cap-cam-1-01",
+          "sensorId": "cam-side-1",
+          "kind": "AREA_CAMERA",
+          "parcelId": "PARCEL-2026-0001",
+          "simTimeMs": 35000,
+          "encoderSpanMm": [
+            780,
+            780
+          ],
+          "stages": [
+            {
+              "stage": "raw",
+              "path": "hiw/assets/success/cap-cam-1-01/raw.png"
+            },
+            {
+              "stage": "maskedCrop",
+              "path": "hiw/assets/success/cap-cam-1-01/maskedCrop.png"
+            },
+            {
+              "stage": "grayscaleContrast",
+              "path": "hiw/assets/success/cap-cam-1-01/grayscaleContrast.png"
+            },
+            {
+              "stage": "edgeMap",
+              "path": "hiw/assets/success/cap-cam-1-01/edgeMap.png"
+            },
+            {
+              "stage": "candidateOverlay",
+              "path": "hiw/assets/success/cap-cam-1-01/candidateOverlay.png"
+            },
+            {
+              "stage": "rectifiedCrop",
+              "path": "hiw/assets/success/cap-cam-1-01/rectifiedCrop.png"
+            }
+          ],
+          "candidate": {
+            "labelInstanceId": "L-side",
+            "source": "pixels",
+            "quadPx": [
+              [
+                213,
+                106
+              ],
+              [
+                358,
+                106
+              ],
+              [
+                358,
+                195
+              ],
+              [
+                213,
+                195
+              ]
+            ]
+          },
+          "decodeCropPath": "hiw/assets/success/cap-cam-1-01/decode-crop.png",
+          "expectedDecode": {
+            "decoded": true,
+            "payload": "B7K9-2026-0042",
+            "reasons": []
+          }
+        },
+        {
+          "captureId": "cap-cam-2-01",
+          "sensorId": "cam-side-2",
+          "kind": "AREA_CAMERA",
+          "parcelId": "PARCEL-2026-0001",
+          "simTimeMs": 35500,
+          "encoderSpanMm": [
+            785,
+            785
+          ],
+          "stages": [
+            {
+              "stage": "raw",
+              "path": "hiw/assets/success/cap-cam-2-01/raw.png"
+            },
+            {
+              "stage": "maskedCrop",
+              "path": "hiw/assets/success/cap-cam-2-01/maskedCrop.png"
+            },
+            {
+              "stage": "grayscaleContrast",
+              "path": "hiw/assets/success/cap-cam-2-01/grayscaleContrast.png"
+            },
+            {
+              "stage": "edgeMap",
+              "path": "hiw/assets/success/cap-cam-2-01/edgeMap.png"
+            },
+            {
+              "stage": "candidateOverlay",
+              "path": "hiw/assets/success/cap-cam-2-01/candidateOverlay.png"
+            },
+            {
+              "stage": "rectifiedCrop",
+              "path": "hiw/assets/success/cap-cam-2-01/rectifiedCrop.png"
+            }
+          ],
+          "candidate": {
+            "labelInstanceId": "L-side",
+            "source": "pixels",
+            "quadPx": [
+              [
+                184,
+                105
+              ],
+              [
+                271,
+                105
+              ],
+              [
+                271,
+                198
+              ],
+              [
+                184,
+                198
+              ]
+            ]
+          },
+          "decodeCropPath": "hiw/assets/success/cap-cam-2-01/decode-crop.png",
+          "expectedDecode": {
+            "decoded": true,
+            "payload": "B7K9-2026-0042",
+            "reasons": []
+          }
+        }
+      ],
+      "observations": [
+        {
+          "observationId": "obs-1",
+          "captureId": "cap-ls-top-01",
+          "parcelId": "PARCEL-2026-0001",
+          "labelInstanceId": "L-top",
+          "decoded": true,
+          "decodedPayload": "A1F4-2026-0001",
+          "reasons": [],
+          "association": {
+            "ok": true
+          }
+        },
+        {
+          "observationId": "obs-2",
+          "captureId": "cap-cam-1-01",
+          "parcelId": "PARCEL-2026-0001",
+          "labelInstanceId": "L-side",
+          "decoded": true,
+          "decodedPayload": "B7K9-2026-0042",
+          "reasons": [],
+          "association": {
+            "ok": true
+          }
+        },
+        {
+          "observationId": "obs-3",
+          "captureId": "cap-cam-2-01",
+          "parcelId": "PARCEL-2026-0001",
+          "labelInstanceId": "L-side",
+          "decoded": true,
+          "decodedPayload": "B7K9-2026-0042",
+          "reasons": [],
+          "association": {
+            "ok": true
+          }
+        }
+      ],
+      "steps": [
+        {
+          "step": 1,
+          "tStartMs": 0,
+          "tEndMs": 7500,
+          "sensorIds": [
+            "photoeye-entry"
+          ]
+        },
+        {
+          "step": 2,
+          "tStartMs": 7500,
+          "tEndMs": 15000,
+          "sensorIds": [
+            "ls-top",
+            "ls-bottom"
+          ],
+          "captureId": "cap-ls-top-01"
+        },
+        {
+          "step": 3,
+          "tStartMs": 15000,
+          "tEndMs": 22500,
+          "sensorIds": [
+            "ls-top",
+            "ls-bottom"
+          ],
+          "captureId": "cap-ls-top-01"
+        },
+        {
+          "step": 4,
+          "tStartMs": 22500,
+          "tEndMs": 30000,
+          "sensorIds": [
+            "ls-top"
+          ],
+          "captureId": "cap-ls-top-01"
+        },
+        {
+          "step": 5,
+          "tStartMs": 30000,
+          "tEndMs": 37500,
+          "sensorIds": [
+            "cam-side-1",
+            "cam-side-2",
+            "cam-side-3",
+            "cam-side-4",
+            "cam-side-5",
+            "cam-side-6"
+          ],
+          "captureId": "cap-cam-1-01"
+        },
+        {
+          "step": 6,
+          "tStartMs": 37500,
+          "tEndMs": 45000,
+          "sensorIds": [
+            "cam-side-1"
+          ],
+          "captureId": "cap-cam-1-01"
+        },
+        {
+          "step": 7,
+          "tStartMs": 45000,
+          "tEndMs": 52500,
+          "sensorIds": [
+            "ls-top",
+            "cam-side-1",
+            "cam-side-2",
+            "cam-side-3",
+            "cam-side-4",
+            "cam-side-5",
+            "cam-side-6"
+          ]
+        },
+        {
+          "step": 8,
+          "tStartMs": 52500,
+          "tEndMs": 60000,
+          "sensorIds": []
+        }
+      ],
+      "result": {
+        "parcelId": "PARCEL-2026-0001",
+        "status": "OK",
+        "finalSimTimeMs": 58000,
+        "values": [
+          {
+            "labelInstanceId": "L-top",
+            "face": "TOP",
+            "payload": "A1F4-2026-0001",
+            "sourceCaptureIds": [
+              "cap-ls-top-01"
+            ],
+            "mergedReads": 1
+          },
+          {
+            "labelInstanceId": "L-side",
+            "face": "FRONT",
+            "payload": "B7K9-2026-0042",
+            "sourceCaptureIds": [
+              "cap-cam-1-01",
+              "cap-cam-2-01"
+            ],
+            "mergedReads": 2
+          }
+        ],
+        "failedReads": []
+      }
+    },
+    "no-read": {
+      "schemaVersion": 1,
+      "fixtureId": "no-read",
+      "parcel": {
+        "parcelId": "PARCEL-2026-0002",
+        "label": "Sample parcel (glare + missed side read)",
+        "labels": [
+          {
+            "labelInstanceId": "L-top",
+            "face": "TOP",
+            "payload": "C5M2-2026-0077"
+          },
+          {
+            "labelInstanceId": "L-side",
+            "face": "FRONT",
+            "payload": "C5M2-2026-0077"
+          }
+        ]
+      },
+      "durationMs": 60000,
+      "keyframes": [
+        {
+          "tMs": 0,
+          "frontZMm": -150,
+          "encoderMm": -150
+        },
+        {
+          "tMs": 7500,
+          "frontZMm": -40,
+          "encoderMm": -40
+        },
+        {
+          "tMs": 15000,
+          "frontZMm": 320,
+          "encoderMm": 320
+        },
+        {
+          "tMs": 22500,
+          "frontZMm": 450,
+          "encoderMm": 450
+        },
+        {
+          "tMs": 30000,
+          "frontZMm": 450,
+          "encoderMm": 450
+        },
+        {
+          "tMs": 37500,
+          "frontZMm": 800,
+          "encoderMm": 800
+        },
+        {
+          "tMs": 45000,
+          "frontZMm": 950,
+          "encoderMm": 950
+        },
+        {
+          "tMs": 52500,
+          "frontZMm": 1200,
+          "encoderMm": 1200
+        },
+        {
+          "tMs": 60000,
+          "frontZMm": 1400,
+          "encoderMm": 1400
+        }
+      ],
+      "sensors": [
+        {
+          "id": "photoeye-entry",
+          "kind": "AREA_CAMERA",
+          "face": "TOP"
+        },
+        {
+          "id": "ls-top",
+          "kind": "LINE_SCAN",
+          "face": "TOP"
+        },
+        {
+          "id": "ls-bottom",
+          "kind": "LINE_SCAN",
+          "face": "BOTTOM"
+        },
+        {
+          "id": "cam-side-1",
+          "kind": "AREA_CAMERA",
+          "face": "FRONT"
+        },
+        {
+          "id": "cam-side-2",
+          "kind": "AREA_CAMERA",
+          "face": "RIGHT"
+        },
+        {
+          "id": "cam-side-3",
+          "kind": "AREA_CAMERA",
+          "face": "RIGHT"
+        },
+        {
+          "id": "cam-side-4",
+          "kind": "AREA_CAMERA",
+          "face": "REAR"
+        },
+        {
+          "id": "cam-side-5",
+          "kind": "AREA_CAMERA",
+          "face": "LEFT"
+        },
+        {
+          "id": "cam-side-6",
+          "kind": "AREA_CAMERA",
+          "face": "LEFT"
+        }
+      ],
+      "captures": [
+        {
+          "captureId": "cap-ls-top-01",
+          "sensorId": "ls-top",
+          "kind": "LINE_SCAN",
+          "parcelId": "PARCEL-2026-0002",
+          "simTimeMs": 12000,
+          "encoderSpanMm": [
+            200,
+            320
+          ],
+          "stages": [
+            {
+              "stage": "raw",
+              "path": "hiw/assets/no-read/cap-ls-top-01/raw.png"
+            },
+            {
+              "stage": "maskedCrop",
+              "path": "hiw/assets/no-read/cap-ls-top-01/maskedCrop.png"
+            },
+            {
+              "stage": "grayscaleContrast",
+              "path": "hiw/assets/no-read/cap-ls-top-01/grayscaleContrast.png"
+            },
+            {
+              "stage": "edgeMap",
+              "path": "hiw/assets/no-read/cap-ls-top-01/edgeMap.png"
+            },
+            {
+              "stage": "candidateOverlay",
+              "path": "hiw/assets/no-read/cap-ls-top-01/candidateOverlay.png"
+            },
+            {
+              "stage": "rectifiedCrop",
+              "path": "hiw/assets/no-read/cap-ls-top-01/rectifiedCrop.png"
+            }
+          ],
+          "candidate": {
+            "labelInstanceId": "L-top",
+            "source": "pixels",
+            "quadPx": [
+              [
+                85,
+                61
+              ],
+              [
+                486,
+                61
+              ],
+              [
+                486,
+                479
+              ],
+              [
+                85,
+                479
+              ]
+            ]
+          },
+          "decodeCropPath": "hiw/assets/no-read/cap-ls-top-01/decode-crop.png",
+          "expectedDecode": {
+            "decoded": true,
+            "payload": "C5M2-2026-0077",
+            "reasons": []
+          }
+        },
+        {
+          "captureId": "cap-cam-1-01",
+          "sensorId": "cam-side-1",
+          "kind": "AREA_CAMERA",
+          "parcelId": "PARCEL-2026-0002",
+          "simTimeMs": 35000,
+          "encoderSpanMm": [
+            780,
+            780
+          ],
+          "stages": [
+            {
+              "stage": "raw",
+              "path": "hiw/assets/no-read/cap-cam-1-01/raw.png"
+            },
+            {
+              "stage": "maskedCrop",
+              "path": "hiw/assets/no-read/cap-cam-1-01/maskedCrop.png"
+            },
+            {
+              "stage": "grayscaleContrast",
+              "path": "hiw/assets/no-read/cap-cam-1-01/grayscaleContrast.png"
+            },
+            {
+              "stage": "edgeMap",
+              "path": "hiw/assets/no-read/cap-cam-1-01/edgeMap.png"
+            },
+            {
+              "stage": "candidateOverlay",
+              "path": "hiw/assets/no-read/cap-cam-1-01/candidateOverlay.png"
+            },
+            {
+              "stage": "rectifiedCrop",
+              "path": "hiw/assets/no-read/cap-cam-1-01/rectifiedCrop.png"
+            }
+          ],
+          "candidate": {
+            "labelInstanceId": "L-side",
+            "source": "pixels",
+            "quadPx": [
+              [
+                213,
+                106
+              ],
+              [
+                358,
+                106
+              ],
+              [
+                358,
+                195
+              ],
+              [
+                213,
+                195
+              ]
+            ]
+          },
+          "decodeCropPath": "hiw/assets/no-read/cap-cam-1-01/decode-crop.png",
+          "expectedDecode": {
+            "decoded": false,
+            "reasons": [
+              "QUALITY:GLARE"
+            ]
+          }
+        },
+        {
+          "captureId": "cap-cam-2-01",
+          "sensorId": "cam-side-2",
+          "kind": "AREA_CAMERA",
+          "parcelId": "PARCEL-2026-0002",
+          "simTimeMs": 35500,
+          "encoderSpanMm": [
+            785,
+            785
+          ],
+          "stages": [
+            {
+              "stage": "raw",
+              "path": "hiw/assets/no-read/cap-cam-2-01/raw.png"
+            },
+            {
+              "stage": "maskedCrop",
+              "path": "hiw/assets/no-read/cap-cam-2-01/maskedCrop.png"
+            },
+            {
+              "stage": "grayscaleContrast",
+              "path": "hiw/assets/no-read/cap-cam-2-01/grayscaleContrast.png"
+            },
+            {
+              "stage": "edgeMap",
+              "path": "hiw/assets/no-read/cap-cam-2-01/edgeMap.png"
+            },
+            {
+              "stage": "candidateOverlay",
+              "path": "hiw/assets/no-read/cap-cam-2-01/candidateOverlay.png"
+            },
+            {
+              "stage": "rectifiedCrop",
+              "path": "hiw/assets/no-read/cap-cam-2-01/rectifiedCrop.png"
+            }
+          ],
+          "candidate": {
+            "labelInstanceId": "L-side",
+            "source": "geometry",
+            "quadPx": [
+              [
+                184,
+                105
+              ],
+              [
+                271,
+                105
+              ],
+              [
+                271,
+                198
+              ],
+              [
+                184,
+                198
+              ]
+            ]
+          },
+          "decodeCropPath": "hiw/assets/no-read/cap-cam-2-01/decode-crop.png",
+          "expectedDecode": {
+            "decoded": false,
+            "reasons": [
+              "QUALITY:LOW_CONTRAST"
+            ]
+          }
+        }
+      ],
+      "observations": [
+        {
+          "observationId": "obs-1",
+          "captureId": "cap-ls-top-01",
+          "parcelId": "PARCEL-2026-0002",
+          "labelInstanceId": "L-top",
+          "decoded": true,
+          "decodedPayload": "C5M2-2026-0077",
+          "reasons": [],
+          "association": {
+            "ok": true
+          }
+        },
+        {
+          "observationId": "obs-2",
+          "captureId": "cap-cam-1-01",
+          "parcelId": "PARCEL-2026-0002",
+          "labelInstanceId": "L-side",
+          "decoded": false,
+          "reasons": [
+            "QUALITY:GLARE"
+          ],
+          "association": {
+            "ok": true
+          }
+        },
+        {
+          "observationId": "obs-3",
+          "captureId": "cap-cam-2-01",
+          "parcelId": "PARCEL-2026-0002",
+          "labelInstanceId": "L-side",
+          "decoded": false,
+          "reasons": [
+            "QUALITY:LOW_CONTRAST"
+          ],
+          "association": {
+            "ok": true
+          }
+        }
+      ],
+      "steps": [
+        {
+          "step": 1,
+          "tStartMs": 0,
+          "tEndMs": 7500,
+          "sensorIds": [
+            "photoeye-entry"
+          ]
+        },
+        {
+          "step": 2,
+          "tStartMs": 7500,
+          "tEndMs": 15000,
+          "sensorIds": [
+            "ls-top",
+            "ls-bottom"
+          ],
+          "captureId": "cap-ls-top-01"
+        },
+        {
+          "step": 3,
+          "tStartMs": 15000,
+          "tEndMs": 22500,
+          "sensorIds": [
+            "ls-top",
+            "ls-bottom"
+          ],
+          "captureId": "cap-ls-top-01"
+        },
+        {
+          "step": 4,
+          "tStartMs": 22500,
+          "tEndMs": 30000,
+          "sensorIds": [
+            "ls-top"
+          ],
+          "captureId": "cap-ls-top-01"
+        },
+        {
+          "step": 5,
+          "tStartMs": 30000,
+          "tEndMs": 37500,
+          "sensorIds": [
+            "cam-side-1",
+            "cam-side-2",
+            "cam-side-3",
+            "cam-side-4",
+            "cam-side-5",
+            "cam-side-6"
+          ],
+          "captureId": "cap-cam-1-01"
+        },
+        {
+          "step": 6,
+          "tStartMs": 37500,
+          "tEndMs": 45000,
+          "sensorIds": [
+            "cam-side-1"
+          ],
+          "captureId": "cap-cam-1-01"
+        },
+        {
+          "step": 7,
+          "tStartMs": 45000,
+          "tEndMs": 52500,
+          "sensorIds": [
+            "ls-top",
+            "cam-side-1",
+            "cam-side-2",
+            "cam-side-3",
+            "cam-side-4",
+            "cam-side-5",
+            "cam-side-6"
+          ]
+        },
+        {
+          "step": 8,
+          "tStartMs": 52500,
+          "tEndMs": 60000,
+          "sensorIds": []
+        }
+      ],
+      "result": {
+        "parcelId": "PARCEL-2026-0002",
+        "status": "PARTIAL",
+        "finalSimTimeMs": 58000,
+        "values": [
+          {
+            "labelInstanceId": "L-top",
+            "face": "TOP",
+            "payload": "C5M2-2026-0077",
+            "sourceCaptureIds": [
+              "cap-ls-top-01"
+            ],
+            "mergedReads": 1
+          }
+        ],
+        "failedReads": [
+          {
+            "captureId": "cap-cam-1-01",
+            "labelInstanceId": "L-side",
+            "reasons": [
+              "QUALITY:GLARE"
+            ]
+          },
+          {
+            "captureId": "cap-cam-2-01",
+            "labelInstanceId": "L-side",
+            "reasons": [
+              "QUALITY:LOW_CONTRAST"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

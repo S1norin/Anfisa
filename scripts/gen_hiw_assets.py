@@ -1,0 +1,743 @@
+#!/usr/bin/env python3
+"""
+Generate the "How it works" replay assets (deterministic, offline).
+
+Installs (run by the user — the agent never pip-installs):
+    python3 -m venv .venv-hiw
+    .venv-hiw/bin/pip install -r requirements-hiw.txt
+
+Usage:
+    .venv-hiw/bin/python scripts/gen_hiw_assets.py              # generate into public/
+    .venv-hiw/bin/python scripts/gen_hiw_assets.py --selftest   # generate + run assertions
+
+Reads  scripts/hiw-asset-spec.json   (emitted from the TS fixtures:
+         npx vite-node scripts/gen-hiw-spec.ts)
+Writes public/hiw/assets/<fixtureId>/manifest.json
+       public/hiw/assets/<fixtureId>/<captureId>/{raw,maskedCrop,grayscaleContrast,
+         edgeMap,candidateOverlay,rectifiedCrop,decode-crop}.png
+
+Determinism: fixed-seed noise, no timestamps anywhere in output. Re-running
+produces byte-identical files (PNGs and manifest JSON).
+
+Rendering
+---------
+* line-scan captures: top/bottom scan strips (belt cross-section, one row per
+  sensor line). Kraft face + printed Code 128 label (ISO 15417, Code 128 B,
+  standard checksum — decodable by production ZXing).
+* area captures: synthetic box in a 2D pinhole camera; label rendered on the
+  FRONT face (visible to the 0° and 45° cameras), painter's algorithm.
+  no-read fixtures: cam1 = glare blob over the label, cam2 = label under a
+  low-contrast shrink wrap (below the pixel-detection threshold).
+
+Stage chain per capture (mirrors the live pipeline order):
+    raw -> maskedCrop -> grayscaleContrast -> edgeMap -> candidateOverlay
+         -> rectifiedCrop (== decode-crop.png, the decode input)
+
+Candidate detection (explicit, self-tested): bright-region contours on the
+raw frame, with morphological closing to bridge the (possibly sub-pixel)
+barcode bars so the whole white label region becomes one blob. Wide,
+sufficiently large blobs become a 'pixels' candidate. Frames where
+detection finds nothing (e.g. the low-contrast wrapped label, which never
+reaches the threshold) fall back to the spec's geometry quad (source
+'geometry' -> UI shows "illustrative candidate location").
+"""
+
+import argparse
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+REPO = Path(__file__).resolve().parent.parent
+SPEC_PATH = REPO / "scripts" / "hiw-asset-spec.json"
+DEFAULT_OUT = REPO / "public"
+
+IMG_W, IMG_H = 570, 480          # area frames (TS fixture quads live in this space)
+STRIP_W, STRIP_H = 570, 560      # line-scan strips (x = belt cross, y = travel)
+
+# Deterministic scene constants (no clocks, no env reads)
+SEED = 42
+KRAFT = np.array([106, 138, 168], dtype=np.float64)   # BGR
+BG = np.array([32, 32, 34], dtype=np.float64)
+BELT = np.array([66, 66, 70], dtype=np.float64)
+LABEL_WHITE = np.array([250, 250, 250], dtype=np.float64)
+
+BOX_W, BOX_H, BOX_L = 170.0, 130.0, 230.0  # x (cross-belt), y (up), z (travel)
+
+CAM = {  # pinhole, look-at (0, 55, 0)
+    "focal": 500.0,
+    "cx": IMG_W / 2.0,
+    "cy": IMG_H / 2.0,
+    "normal": (0.0, 150.0, 430.0),
+    "low": (0.0, 330.0, 430.0),
+}
+
+# Azimuth + camera height per side camera id (story geometry; must stay in
+# sync with SIDE_CAMERAS in src/ui/howItWorks/fixtures.ts).
+SIDE_CAM_VIEW = {
+    "cam-side-1": (0.0, "normal"),
+    "cam-side-2": (45.0, "normal"),
+    "cam-side-3": (135.0, "normal"),
+    "cam-side-4": (180.0, "normal"),
+    "cam-side-5": (225.0, "low"),
+    "cam-side-6": (270.0, "low"),
+}
+
+START_B = 104
+QUIET_MODULES = 10
+BARCODE_ROWS_MODULES = 25
+
+
+# ---------------------------------------------------------------------------
+# Code 128 (ISO 15417, Code 128 B) — patterns ported verbatim from
+# src/pipeline/code128Table.ts; standard (unweighted) checksum so production
+# ZXing accepts the symbols.
+# ---------------------------------------------------------------------------
+
+CODE128_PATTERNS = [
+  [2, 1, 2, 2, 2, 2],
+  [2, 2, 2, 1, 2, 2],
+  [2, 2, 2, 2, 2, 1],
+  [1, 2, 1, 2, 2, 3],
+  [1, 2, 1, 3, 2, 2],
+  [1, 3, 1, 2, 2, 2],
+  [1, 2, 2, 2, 1, 3],
+  [1, 2, 2, 3, 1, 2],
+  [1, 3, 2, 2, 1, 2],
+  [2, 2, 1, 2, 1, 3],
+  [2, 2, 1, 3, 1, 2],
+  [2, 3, 1, 2, 1, 2],
+  [1, 1, 2, 2, 3, 2],
+  [1, 2, 2, 1, 3, 2],
+  [1, 2, 2, 2, 3, 1],
+  [1, 1, 3, 2, 2, 2],
+  [1, 2, 3, 1, 2, 2],
+  [1, 2, 3, 2, 2, 1],
+  [2, 2, 3, 2, 1, 1],
+  [2, 2, 1, 1, 3, 2],
+  [2, 2, 1, 2, 3, 1],
+  [2, 1, 3, 2, 1, 2],
+  [2, 2, 3, 1, 1, 2],
+  [3, 1, 2, 1, 3, 1],
+  [3, 1, 1, 2, 2, 2],
+  [3, 2, 1, 1, 2, 2],
+  [3, 2, 1, 2, 2, 1],
+  [3, 1, 2, 2, 1, 2],
+  [3, 2, 2, 1, 1, 2],
+  [3, 2, 2, 2, 1, 1],
+  [2, 1, 2, 1, 2, 3],
+  [2, 1, 2, 3, 2, 1],
+  [2, 3, 2, 1, 2, 1],
+  [1, 1, 1, 3, 2, 3],
+  [1, 3, 1, 1, 2, 3],
+  [1, 3, 1, 3, 2, 1],
+  [1, 1, 2, 3, 1, 3],
+  [1, 3, 2, 1, 1, 3],
+  [1, 3, 2, 3, 1, 1],
+  [2, 1, 1, 3, 1, 3],
+  [2, 3, 1, 1, 1, 3],
+  [2, 3, 1, 3, 1, 1],
+  [1, 1, 2, 1, 3, 3],
+  [1, 1, 2, 3, 3, 1],
+  [1, 3, 2, 1, 3, 1],
+  [1, 1, 3, 1, 2, 3],
+  [1, 1, 3, 3, 2, 1],
+  [1, 3, 3, 1, 2, 1],
+  [3, 1, 3, 1, 2, 1],
+  [2, 1, 1, 3, 3, 1],
+  [2, 3, 1, 1, 3, 1],
+  [2, 1, 3, 1, 1, 3],
+  [2, 1, 3, 3, 1, 1],
+  [2, 1, 3, 1, 3, 1],
+  [3, 1, 1, 1, 2, 3],
+  [3, 1, 1, 3, 2, 1],
+  [3, 3, 1, 1, 2, 1],
+  [3, 1, 2, 1, 1, 3],
+  [3, 1, 2, 3, 1, 1],
+  [3, 3, 2, 1, 1, 1],
+  [3, 1, 4, 1, 1, 1],
+  [2, 2, 1, 4, 1, 1],
+  [4, 3, 1, 1, 1, 1],
+  [1, 1, 1, 2, 2, 4],
+  [1, 1, 1, 4, 2, 2],
+  [1, 2, 1, 1, 2, 4],
+  [1, 2, 1, 4, 2, 1],
+  [1, 4, 1, 1, 2, 2],
+  [1, 4, 1, 2, 2, 1],
+  [1, 1, 2, 2, 1, 4],
+  [1, 1, 2, 4, 1, 2],
+  [1, 2, 2, 1, 1, 4],
+  [1, 2, 2, 4, 1, 1],
+  [1, 4, 2, 1, 1, 2],
+  [1, 4, 2, 2, 1, 1],
+  [2, 4, 1, 2, 1, 1],
+  [2, 2, 1, 1, 1, 4],
+  [4, 1, 3, 1, 1, 1],
+  [2, 4, 1, 1, 1, 2],
+  [1, 3, 4, 1, 1, 1],
+  [1, 1, 1, 2, 4, 2],
+  [1, 2, 1, 1, 4, 2],
+  [1, 2, 1, 2, 4, 1],
+  [1, 1, 4, 2, 1, 2],
+  [1, 2, 4, 1, 1, 2],
+  [1, 2, 4, 2, 1, 1],
+  [4, 1, 1, 2, 1, 2],
+  [4, 2, 1, 1, 1, 2],
+  [4, 2, 1, 2, 1, 1],
+  [2, 1, 2, 1, 4, 1],
+  [2, 1, 4, 1, 2, 1],
+  [4, 1, 2, 1, 2, 1],
+  [1, 1, 1, 1, 4, 3],
+  [1, 1, 1, 3, 4, 1],
+  [1, 3, 1, 1, 4, 1],
+  [1, 1, 4, 1, 1, 3],
+  [1, 1, 4, 3, 1, 1],
+  [4, 1, 1, 1, 1, 3],
+  [4, 1, 1, 3, 1, 1],
+  [1, 1, 3, 1, 4, 1],
+  [1, 1, 4, 1, 3, 1],
+  [3, 1, 1, 1, 4, 1],
+  [4, 1, 1, 1, 3, 1],
+  [2, 1, 1, 4, 1, 2],
+  [2, 1, 1, 2, 1, 4],
+  [2, 1, 1, 2, 3, 2],
+  [2, 3, 3, 1, 1, 1],
+]
+
+
+def code128_elements(payload: str) -> list[int]:
+    """Bar/space element widths for an ISO Code 128 B symbol."""
+    data = [ord(c) - 32 for c in payload]
+    csum = (START_B + sum(data)) % 103
+    values = [START_B, *data, csum]
+    els = []
+    for v in values:
+        els.extend(CODE128_PATTERNS[v])
+    els.extend([2, 3, 3, 1, 1, 1, 2])  # stop pattern + 2-module guard
+    return els
+
+
+def render_barcode(payload: str, module_px: int) -> np.ndarray:
+    """Black(0)/white(255) barcode bitmap, quiet zone included."""
+    els = code128_elements(payload)
+    total_modules = QUIET_MODULES * 2 + sum(els)
+    w = total_modules * module_px
+    h = BARCODE_ROWS_MODULES * module_px
+    img = np.full((h, w), 255, dtype=np.uint8)
+    x = QUIET_MODULES * module_px
+    for i, width in enumerate(els):
+        if i % 2 == 0:  # bar
+            img[:, x : x + width * module_px] = 0
+        x += width * module_px
+    return img
+
+
+# ---------------------------------------------------------------------------
+# Small image helpers
+# ---------------------------------------------------------------------------
+
+
+def base_canvas(w: int, h: int, color: np.ndarray, seed: int) -> np.ndarray:
+    img = np.tile(color, ((h, w, 1)))
+    rng = np.random.default_rng(seed)
+    img += rng.normal(0.0, 2.0, img.shape)
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def _look_at(cam_pos: np.ndarray, target: np.ndarray):
+    fwd = target - cam_pos
+    fwd /= np.linalg.norm(fwd)
+    right = np.cross(fwd, np.array([0.0, 1.0, 0.0]))
+    right /= np.linalg.norm(right)
+    up = np.cross(right, fwd)
+    return cam_pos, right, up, fwd
+
+
+def project(pts: np.ndarray, cam_pos, right, up, fwd) -> tuple[np.ndarray, np.ndarray]:
+    """World pts (N,3) -> (image xy (N,2), depth (N,))."""
+    rel = pts - cam_pos
+    x = rel @ right
+    y = rel @ up
+    z = rel @ fwd
+    fx = CAM["focal"] * x / z + CAM["cx"]
+    fy = -CAM["focal"] * y / z + CAM["cy"]
+    return np.column_stack([fx, fy]), z
+
+
+def box_faces(center: np.ndarray, azimuth_deg: float) -> dict[str, tuple[np.ndarray, float]]:
+    """6 face corners (world, already rotated) + base brightness factor.
+
+    Faces are keyed by their pre-rotation normal: 'front' (+z, label face),
+    'rear' (−z), 'right' (+x), 'left' (−x), 'top' (+y), 'bottom' (−y).
+    """
+    th = np.deg2rad(azimuth_deg)
+    rot = np.array(
+        [[np.cos(th), 0.0, -np.sin(th)], [0.0, 1.0, 0.0], [np.sin(th), 0.0, np.cos(th)]]
+    )
+    hw, hh, hl = BOX_W / 2, BOX_H / 2, BOX_L / 2
+    corners = {
+        "front": np.array(
+            [[-hw, hh, hl], [hw, hh, hl], [hw, -hh, hl], [-hw, -hh, hl]]
+        ),
+        "rear": np.array([[-hw, hh, -hl], [hw, hh, -hl], [hw, -hh, -hl], [-hw, -hh, -hl]]),
+        "right": np.array([[hw, hh, -hl], [hw, hh, hl], [hw, -hh, hl], [hw, -hh, -hl]]),
+        "left": np.array([[-hw, hh, hl], [-hw, hh, -hl], [-hw, -hh, -hl], [-hw, -hh, hl]]),
+        "top": np.array([[-hw, hh, -hl], [hw, hh, -hl], [hw, hh, hl], [-hw, hh, hl]]),
+        "bottom": np.array([[-hw, -hh, hl], [hw, -hh, hl], [hw, -hh, -hl], [-hw, -hh, -hl]]),
+    }
+    shade = {"front": 1.0, "rear": 0.78, "right": 0.9, "left": 0.9, "top": 1.06, "bottom": 0.55}
+    out = {}
+    for name, c in corners.items():
+        world = (c + center) @ rot.T
+        out[name] = (world, shade[name])
+    return out
+
+
+def label_face_corners(center: np.ndarray, azimuth_deg: float) -> np.ndarray:
+    """4 world corners of the label on the FRONT face (u along face x, v along y)."""
+    th = np.deg2rad(azimuth_deg)
+    rot = np.array(
+        [[np.cos(th), 0.0, -np.sin(th)], [0.0, 1.0, 0.0], [np.sin(th), 0.0, np.cos(th)]]
+    )
+    hw, hh = BOX_W / 2, BOX_H / 2
+    u0, u1 = -0.30 * BOX_W, 0.30 * BOX_W
+    v0, v1 = 0.30 * BOX_H, 0.78 * BOX_H
+    local = np.array(
+        [[u0, v0, hh + 0.5], [u1, v0, hh + 0.5], [u1, v1, hh + 0.5], [u0, v1, hh + 0.5]]
+    )
+    return (local + center) @ rot.T
+
+
+def render_area_frame(
+    payload: str,
+    azimuth_deg: float,
+    cam_key: str,
+    label: str,  # 'none' | 'clean' | 'glare' | 'wrapped'
+    seed: int,
+) -> np.ndarray:
+    cam_pos = np.array(CAM[cam_key])
+    target = np.array([0.0, 55.0, 0.0])
+    _, right, up, fwd = _look_at(cam_pos, target)
+
+    img = base_canvas(IMG_W, IMG_H, BG, seed)
+    # conveyor belt
+    belt = np.array([[0, 340], [IMG_W, 340], [IMG_W, IMG_H], [0, IMG_H]], dtype=np.int32)
+    cv2.fillPoly(img, [belt], tuple(int(v) for v in BELT))
+    rng = np.random.default_rng(seed + 1)
+    noise = rng.normal(0.0, 1.5, (IMG_H - 340, IMG_W))
+    img[340:] = np.clip(img[340:].astype(float) + noise[..., None], 0, 255).astype(np.uint8)
+
+    faces = box_faces(np.array([0.0, BOX_H / 2, 0.0]), azimuth_deg)
+    # painter's algorithm: farthest first, cull back-facing
+    order = sorted(
+        faces.items(),
+        key=lambda kv: project(kv[1][0], cam_pos, right, up, fwd)[1].mean(),
+        reverse=True,
+    )
+    for name, (corners, shade) in order:
+        xy, z = project(corners, cam_pos, right, up, fwd)
+        if z.min() <= 0:
+            continue
+        normal = np.cross(corners[1] - corners[0], corners[2] - corners[0])
+        view = corners.mean(axis=0) - cam_pos
+        if np.dot(normal, view) > 0:
+            continue
+        col = tuple(int(v) for v in np.clip(KRAFT * shade, 0, 255))
+        cv2.fillPoly(img, [xy.astype(np.int32)], col)
+
+    if label != "none" and azimuth_deg <= 45.0 + 1e-6:
+        label_world = label_face_corners(np.array([0.0, BOX_H / 2, 0.0]), azimuth_deg)
+        xy, z = project(label_world, cam_pos, right, up, fwd)
+        if z.min() > 0:
+            bc = render_barcode(payload, 3)  # 3 px/module
+            src = np.array(
+                [
+                    [0, 0],
+                    [bc.shape[1] - 1, 0],
+                    [bc.shape[1] - 1, bc.shape[0] - 1],
+                    [0, bc.shape[0] - 1],
+                ],
+                dtype=np.float32,
+            )
+            m = cv2.getPerspectiveTransform(src, xy.astype(np.float32))
+            white = np.dstack([bc, bc, bc])
+            warped = cv2.warpPerspective(white, m, (IMG_W, IMG_H), flags=cv2.INTER_LINEAR)
+            mask = cv2.warpPerspective(
+                np.full(bc.shape, 255, np.uint8), m, (IMG_W, IMG_H), flags=cv2.INTER_NEAREST
+            )
+            ok = mask > 0
+            img[ok] = warped[ok]
+
+            if label == "glare":
+                cx, cy = int(xy.mean(axis=0)[0]), int(xy.mean(axis=0)[1])
+                ys, xs = np.mgrid[0:IMG_H, 0:IMG_W]
+                d = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
+                r = max(xy[:, 0].max() - xy[:, 0].min(), xy[:, 1].max() - xy[:, 1].min())
+                g = np.clip(1.0 - d / (0.75 * r), 0.0, 1.0) * 0.9
+                img = np.clip(img.astype(float) + g[..., None] * 200, 0, 255).astype(np.uint8)
+            elif label == "wrapped":
+                # low-contrast shrink wash: pull the label toward the kraft tone
+                # (kraft under the label = KRAFT; front face shade factor is 1.0)
+                wash = KRAFT + 28.0
+                img[ok] = (0.30 * warped[ok].astype(float) + 0.70 * wash).astype(np.uint8)
+    return img
+
+
+def render_top_strip(payload: str, seed: int) -> np.ndarray:
+    img = base_canvas(STRIP_W, STRIP_H, KRAFT, seed).astype(np.float32)
+    img += np.random.default_rng(seed + 2).normal(0.0, 1.5, img.shape)
+    img = np.clip(img, 0, 255).astype(np.uint8)
+    for y in (120, 440):  # packing tape seams crossing the parcel
+        cv2.line(img, (0, y), (STRIP_W, y), (88, 108, 128), 3)
+    # white label, barcode along travel (y axis rotated 90°: barcode rows = x)
+    l0, l1, t0, t1 = 85, 485, 70, 470
+    cv2.rectangle(img, (l0, t0), (l1, t1), (250, 250, 250), -1)
+    bc = render_barcode(payload, 2)
+    # rotate: barcode width runs along y (travel), height along x
+    bc_rot = np.rot90(bc, k=1)  # (w_bc, h_bc) -> (h_bc, w_bc)
+    x0 = (STRIP_W - bc_rot.shape[1]) // 2
+    y0 = t0 + (t1 - t0 - bc_rot.shape[0]) // 2
+    img[y0 : y0 + bc_rot.shape[0], x0 : x0 + bc_rot.shape[1]] = cv2.cvtColor(bc_rot, cv2.COLOR_GRAY2BGR)
+    return img
+
+
+# ---------------------------------------------------------------------------
+# Stage chain
+# ---------------------------------------------------------------------------
+
+DETECT_MIN_AREA = 60 * 25
+DETECT_MIN_COL_STD = 18.0
+DETECT_THRESHOLD = 200
+DETECT_CLOSE_KERNEL = 15
+
+
+def parcel_mask_poly(area: bool, azimuth_deg: float) -> np.ndarray:
+    """Silhouette polygon for the maskedCrop stage."""
+    if area:
+        cam_pos = np.array(CAM["normal"])
+        _, right, up, fwd = _look_at(cam_pos, np.array([0.0, 55.0, 0.0]))
+        faces = box_faces(np.array([0.0, BOX_H / 2, 0.0]), azimuth_deg)
+        pts = np.concatenate([f[0] for f in faces.values()])
+        xy, z = project(pts, cam_pos, right, up, fwd)
+        mask = cv2.convexHull(xy.astype(np.float32), returnPoints=True)
+        return mask.reshape(-1, 2).astype(np.int32)
+    # line strip: parcel occupies the central band (y = travel extent)
+    return np.array(
+        [[12, 40], [STRIP_W - 12, 40], [STRIP_W - 12, 520], [12, 520]], dtype=np.int32
+    )
+
+
+def detect_candidate(raw: np.ndarray) -> np.ndarray | None:
+    """Bright wide region -> 4-point quad (TL,TR,BR,BL), else None.
+
+    Closing bridges barcode bars (sub-pixel in area frames, thin rows in
+    strips) so the label region becomes one blob; below-threshold regions
+    (wrapped label) never form a blob -> geometry fallback by the caller.
+    """
+    gray = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY)
+    _, th = cv2.threshold(gray, DETECT_THRESHOLD, 255, cv2.THRESH_BINARY)
+    k = cv2.getStructuringElement(cv2.MORPH_RECT, (DETECT_CLOSE_KERNEL, DETECT_CLOSE_KERNEL))
+    th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, k)
+    contours, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    best, best_area = None, 0.0
+    for c in contours:
+        x, y, w, h = cv2.boundingRect(c)
+        if w < 60 or h < 25 or w / max(h, 1) < 0.8:
+            continue
+        if w * h < DETECT_MIN_AREA:
+            continue
+        col = cv2.GaussianBlur(gray[y : y + h, x : x + w], (5, 5), 0).mean(axis=0)
+        if float(col.std()) < DETECT_MIN_COL_STD:
+            continue  # uniform bright blob (glare wash without bars) — no candidate
+        if w * h > best_area:
+            best_area = float(w * h)
+            best = np.array([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], dtype=np.float32)
+    return best
+
+
+def stage_stages(raw: np.ndarray, quad: np.ndarray, poly: np.ndarray | None) -> dict[str, np.ndarray]:
+    masked = raw.copy()
+    if poly is not None:
+        m = np.zeros(raw.shape[:2], np.uint8)
+        cv2.fillPoly(m, [poly], 255)
+        masked = cv2.bitwise_and(raw, raw, mask=m)
+    gray = cv2.cvtColor(masked, cv2.COLOR_BGR2GRAY)
+    contrast = cv2.equalizeHist(gray)
+    edges = cv2.Canny(gray, 80, 160)
+    overlay = raw.copy()
+    cv2.polylines(overlay, [quad.astype(np.int32)], True, (0, 220, 0), 2)
+    for i in range(4):
+        cx, cy = map(int, quad[i])
+        cv2.circle(overlay, (cx, cy), 4, (0, 220, 0), -1)
+    return {"maskedCrop": masked, "grayscaleContrast": contrast, "edgeMap": edges, "candidateOverlay": overlay}
+
+
+def rectify(raw: np.ndarray, quad: np.ndarray, out_w: int, out_h: int) -> np.ndarray:
+    m = cv2.getPerspectiveTransform(quad, np.array(
+        [[0, 0], [out_w - 1, 0], [out_w - 1, out_h - 1], [0, out_h - 1]], dtype=np.float32
+    ))
+    return cv2.warpPerspective(raw, m, (out_w, out_h), flags=cv2.INTER_CUBIC)
+
+
+def sha256_file(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Manifest
+# ---------------------------------------------------------------------------
+
+STAGE_FILES = ["raw", "maskedCrop", "grayscaleContrast", "edgeMap", "candidateOverlay", "rectifiedCrop"]
+
+
+def build_capture(spec_cap: dict, raw: np.ndarray, poly: np.ndarray | None, out_dir: Path) -> dict:
+    detected = detect_candidate(raw)
+    if detected is not None:
+        quad, source = detected, "pixels"
+    else:
+        quad = np.array(spec_cap["candidate"]["quadPx"], dtype=np.float32)
+        source = "geometry"
+    stages = stage_stages(raw, quad, poly)
+    (out_dir / "raw.png").write_bytes(_png(raw))
+    for name, img in stages.items():
+        (out_dir / f"{name}.png").write_bytes(_png(img))
+    # aspect-preserving rectify to a fixed width, so barcode modules land at
+    # a ZXing-friendly scale (~3 px/module)
+    x0 = quad[:, 0].min(); x1 = quad[:, 0].max()
+    y0 = quad[:, 1].min(); y1 = quad[:, 1].max()
+    decode_w = 700
+    scale = decode_w / max(x1 - x0, 1)
+    decode_h = max(60, int(round((y1 - y0) * scale)))
+    crop = rectify(raw, quad, decode_w, decode_h)
+    crop_bytes = _png(crop)
+    (out_dir / "rectifiedCrop.png").write_bytes(crop_bytes)  # == decode input
+    (out_dir / "decode-crop.png").write_bytes(crop_bytes)
+    cap = dict(spec_cap)
+    cap["candidate"] = {**spec_cap["candidate"], "source": source, "quadPx": quad.astype(int).tolist()}
+    cap["params"] = {
+        "detector": {
+            "threshold": DETECT_THRESHOLD,
+            "closeKernel": DETECT_CLOSE_KERNEL,
+            "minArea": DETECT_MIN_AREA,
+            "minColumnStdDev": DETECT_MIN_COL_STD,
+        },
+        "canny": [80, 160],
+        "decodeCropSize": [decode_w, decode_h],
+    }
+    return cap
+
+
+def _png(img: np.ndarray) -> bytes:
+    ok, buf = cv2.imencode(".png", img)
+    assert ok
+    return buf.tobytes()
+
+
+RESULT_STATUSES = ("OK", "PARTIAL", "NO_READ", "AMBIGUOUS", "SENSOR_FAULT")
+KINDS = ("LINE_SCAN", "AREA_CAMERA")
+
+
+def validate_manifest(m: dict) -> None:
+    """AC3: field-level validation against the TS ReplayManifest schema
+    (src/ui/howItWorks/replayManifest.ts)."""
+    assert m["schemaVersion"] == 1
+    assert m["fixtureId"] in ("success", "no-read")
+
+    p = m["parcel"]
+    assert p["parcelId"]
+    assert isinstance(p["label"], str) and p["label"]
+    assert p["labels"], "parcel must carry ground-truth labels"
+    for lab in p["labels"]:
+        assert set(lab) == {"labelInstanceId", "face", "payload"}
+        assert lab["labelInstanceId"] and lab["face"] and lab["payload"]
+
+    assert isinstance(m["durationMs"], int) and m["durationMs"] > 0
+
+    kfs = m["keyframes"]
+    assert len(kfs) >= 2
+    last_t = -1
+    for kf in kfs:
+        assert set(kf) == {"tMs", "frontZMm", "encoderMm"}
+        assert all(isinstance(v, (int, float)) for v in kf.values())
+        assert kf["tMs"] > last_t, "keyframes must be monotonic in tMs"
+        last_t = kf["tMs"]
+
+    sensor_ids = set()
+    for s in m["sensors"]:
+        assert set(s) == {"id", "kind", "face"}
+        assert s["kind"] in KINDS
+        sensor_ids.add(s["id"])
+    assert len(sensor_ids) == len(m["sensors"])
+
+    cap_ids = set()
+    assert m["captures"]
+    for c in m["captures"]:
+        cap_ids.add(c["captureId"])
+        assert c["sensorId"] in sensor_ids
+        assert c["kind"] in KINDS
+        assert c["sensorId"].startswith("ls-") == (c["kind"] == "LINE_SCAN")
+        assert c["parcelId"] == p["parcelId"]
+        assert isinstance(c["simTimeMs"], int) and 0 <= c["simTimeMs"] <= m["durationMs"]
+        assert isinstance(c["encoderSpanMm"], list) and len(c["encoderSpanMm"]) == 2
+        assert all(isinstance(v, (int, float)) for v in c["encoderSpanMm"])
+        assert [st["stage"] for st in c["stages"]] == STAGE_FILES
+        for st in c["stages"]:
+            assert set(st) == {"stage", "path"}
+            assert st["path"].startswith(f"hiw/assets/{m['fixtureId']}/{c['captureId']}/")
+            assert st["path"].endswith(".png")
+        cand = c.get("candidate")
+        if cand is not None:
+            assert cand["source"] in ("pixels", "geometry", "manual")
+            assert cand["labelInstanceId"]
+            assert len(cand["quadPx"]) == 4 and all(len(q) == 2 for q in cand["quadPx"])
+            assert all(isinstance(v, (int, float)) for q in cand["quadPx"] for v in q)
+        if c.get("decodeCropPath") is not None:
+            assert c["decodeCropPath"].endswith(f"{c['captureId']}/decode-crop.png")
+            assert ".png.png" not in c["decodeCropPath"]
+        ed = c.get("expectedDecode")
+        if ed is not None:
+            assert isinstance(ed["decoded"], bool)
+            assert isinstance(ed["reasons"], list)
+            if ed["decoded"]:
+                assert isinstance(ed.get("payload"), str) and ed["payload"]
+                assert not ed["reasons"]
+            else:
+                assert ed["reasons"], "failed decode must carry explicit reasons"
+
+    assert m["observations"]
+    for o in m["observations"]:
+        assert o["captureId"] in cap_ids
+        assert o["parcelId"] == p["parcelId"]
+        assert isinstance(o["decoded"], bool)
+        assert (o["decoded"] is True) == (o.get("decodedPayload") is not None)
+        if o["decoded"]:
+            assert not o["reasons"]
+        else:
+            assert len(o["reasons"]) >= 1
+        assert isinstance(o["association"]["ok"], bool)
+
+    steps = m["steps"]
+    assert len(steps) == 8
+    for i, st in enumerate(steps, 1):
+        assert st["step"] == i
+        assert st["tStartMs"] < st["tEndMs"] <= m["durationMs"]
+        assert all(s in sensor_ids for s in st["sensorIds"])
+        if st.get("captureId"):
+            assert st["captureId"] in cap_ids
+    assert steps[0]["tStartMs"] == 0
+    assert steps[-1]["tEndMs"] == m["durationMs"]
+
+    r = m["result"]
+    assert r["parcelId"] == p["parcelId"]
+    assert r["status"] in RESULT_STATUSES
+    assert isinstance(r["finalSimTimeMs"], int)
+    for v in r["values"]:
+        assert v["sourceCaptureIds"] and set(v["sourceCaptureIds"]) <= cap_ids
+        assert v["mergedReads"] >= 1
+    for f in r["failedReads"]:
+        assert f["captureId"] in cap_ids and len(f["reasons"]) >= 1
+
+
+def build_manifest(spec_fix: dict, fixture_id: str, captures: list[dict]) -> dict:
+    m = json.loads(json.dumps(spec_fix))  # deep copy
+    m["fixtureId"] = fixture_id
+    m["captures"] = captures
+    validate_manifest(m)
+    return m
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+def gen_fixture(spec_fix: dict, fixture_id: str, out_root: Path) -> Path:
+    face_payloads = {L["face"]: L["payload"] for L in spec_fix["parcel"]["labels"]}
+    out_dir = out_root / "hiw" / "assets" / fixture_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    captures = []
+    for cap in spec_fix["captures"]:
+        cap_out = out_dir / cap["captureId"]
+        cap_out.mkdir(parents=True, exist_ok=True)
+        if cap["kind"] == "LINE_SCAN":
+            seed = 1000 + sum(ord(ch) for ch in cap["sensorId"]) % 1000
+            raw = render_top_strip(face_payloads["TOP"], seed)
+            poly = parcel_mask_poly(area=False, azimuth_deg=0.0)
+        else:
+            azimuth, cam_key = SIDE_CAM_VIEW[cap["sensorId"]]
+            if fixture_id == "no-read":
+                label = "glare" if cap["sensorId"] == "cam-side-1" else (
+                    "wrapped" if cap["sensorId"] == "cam-side-2" else "none")
+            else:
+                label = "clean"
+            raw = render_area_frame(face_payloads["FRONT"], azimuth, cam_key, label, seed=2000)
+            poly = parcel_mask_poly(area=True, azimuth_deg=azimuth)
+        captures.append(build_capture(cap, raw, poly, cap_out))
+    m = build_manifest(spec_fix, fixture_id, captures)
+    (out_dir / "manifest.json").write_text(json.dumps(m, sort_keys=True, indent=2) + "\n")
+    return out_dir
+
+
+def selftest(out_root: Path) -> None:
+    for fid in ("success", "no-read"):
+        out_dir = out_root / "hiw" / "assets" / fid
+        m = json.loads((out_dir / "manifest.json").read_text())
+        validate_manifest(m)
+        by_cap = {c["captureId"]: c for c in m["captures"]}
+        # every stage file exists + is a non-trivial PNG
+        for c in m["captures"]:
+            for st in c["stages"]:
+                p = out_root / st["path"]
+                assert p.exists() and p.stat().st_size > 2000, st["path"]
+            assert (out_root / c["decodeCropPath"]).exists()
+        if fid == "success":
+            for c in m["captures"]:
+                assert c["candidate"]["source"] == "pixels", c["captureId"]
+        else:
+            assert by_cap["cap-ls-top-01"]["candidate"]["source"] == "pixels"
+            assert by_cap["cap-cam-1-01"]["candidate"]["source"] == "pixels"
+            assert by_cap["cap-cam-2-01"]["candidate"]["source"] == "geometry"
+            assert "QUALITY:LOW_CONTRAST" in by_cap["cap-cam-2-01"]["expectedDecode"]["reasons"]
+        # area frames: all distinct (viewing angle changes the frame)
+        area_files = sorted(p for p in out_dir.glob("cap-cam-*/raw.png"))
+        hashes = {sha256_file(p) for p in area_files}
+        assert len(area_files) >= 2 and len(hashes) == len(area_files)
+        # barcode sanity: rendered symbol decodes structurally (element count)
+        els = code128_elements("A1F4-2026-0001")
+        assert len(els) == 16 * 6 + 7  # (start + 14 data + checksum) x 6 + stop
+        assert sum(els) == 16 * 11 + 13  # 11 modules per value + 13 stop modules
+    # determinism: manifest byte-identical across two builds
+    a = sha256_file(out_root / "hiw/assets/success/manifest.json")
+    m2 = build_manifest(
+        json.loads((SPEC_PATH).read_text())["fixtures"]["success"],
+        "success",
+        json.loads((out_root / "hiw/assets/success/manifest.json").read_text())["captures"],
+    )
+    assert json.dumps(m2, sort_keys=True, indent=2) == json.dumps(
+        json.loads((out_root / "hiw/assets/success/manifest.json").read_text()),
+        sort_keys=True, indent=2,
+    )
+    assert a is not None
+    print("selftest: OK")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out", default=str(DEFAULT_OUT))
+    ap.add_argument("--selftest", action="store_true")
+    args = ap.parse_args()
+    out_root = Path(args.out)
+    spec = json.loads(SPEC_PATH.read_text())
+    for fid in ("success", "no-read"):
+        gen_fixture(spec["fixtures"][fid], fid, out_root)
+        print(f"wrote {out_root / 'hiw' / 'assets' / fid}")
+    if args.selftest:
+        selftest(out_root)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
