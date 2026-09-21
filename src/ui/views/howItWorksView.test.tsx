@@ -157,10 +157,10 @@ describe('HowItWorksView shell (t2-2)', () => {
     expect(screen.queryByTestId('hiw-strip')).toBeNull();
     expect(screen.queryByTestId('hiw-strip-scanline')).toBeNull();
 
-    // Area-camera steps keep the placeholder, not the strip.
-    setT(37500);
+    // Steps without dedicated content keep the placeholder, not the strip.
+    setT(52500); // step 7 (no per-step content yet)
     expect(screen.queryByTestId('hiw-strip')).toBeNull();
-    expect(screen.getByTestId('image-panel-capture')).toHaveTextContent('cap-cam-1-01');
+    expect(screen.queryByTestId('image-panel-capture')).toBeNull();
   });
 
   it('step 2: current 1D line + top/bottom 2D strips, bottom gap-clipped (t3-2)', () => {
@@ -241,6 +241,29 @@ describe('HowItWorksView shell (t2-2)', () => {
     );
     // out-of-view camera: honest "no label" note, no fabricated claim
     expect(screen.getByTestId('step5-label-not-visible')).toBeTruthy();
+  });
+
+  it('step 6: side-image preparation carries the selected camera and freezes the pose (t5-1)', () => {
+    render(<HowItWorksView />);
+    scrubTo(5);
+    // Select cam-side-2 in step 5 — its frame is what step 6 prepares.
+    fireEvent.click(screen.getByTestId('step5-chip-cam-side-2'));
+    scrubTo(6);
+    const panel = screen.getByTestId('step6-prep');
+    expect(panel).toHaveAttribute('data-capture-id', 'cap-cam-2-01');
+    expect(screen.getByTestId('step6-frozen').textContent).toContain('785 mm');
+    // The 2D stage chain from the manifest, all six stages.
+    for (const stage of [
+      'raw',
+      'maskedCrop',
+      'grayscaleContrast',
+      'edgeMap',
+      'candidateOverlay',
+      'rectifiedCrop',
+    ]) {
+      expect(screen.getByTestId(`stage-tile-${stage}`)).toBeTruthy();
+    }
+    expect(screen.getByTestId('step6-crop-img')).toBeTruthy();
   });
 
   it('mode switch: live shows the unavailable placeholder; guided stays usable', () => {

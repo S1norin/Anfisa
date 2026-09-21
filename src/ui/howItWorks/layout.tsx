@@ -55,6 +55,10 @@ import {
   SideCameraCaptureHighlight,
   type SideCamId,
 } from './step5SideCameras';
+import {
+  Step6SidePrep,
+  frozenFrontZAt,
+} from './step6SidePrep';
 
 export type HiwMode = 'guided' | 'live';
 export type HiwViewPreset = 'orbit' | 'top' | 'side' | 'sensor';
@@ -208,7 +212,17 @@ function HiwScenePanel({
   const activeSensors = manifest.steps[stepIdx]?.sensorIds ?? [];
   const highlightId =
     activeSensors.find((id) => config.cameraRigs.some((r) => r.id === id)) ?? null;
-  const parcel = storyParcelAt(manifest, timeMs);
+  // Step 6: the parcel is FROZEN at the encoder position of the selected
+  // capture — the pose that produced the frame (the story keyframes keep
+  // moving; this step pins them).
+  const frozenZ =
+    highlight === 'side-prep-frozen'
+      ? frozenFrontZAt(manifest, timeMs, sideCamId)
+      : null;
+  const parcel =
+    frozenZ !== null
+      ? { ...storyParcelAt(manifest, timeMs), frontZMm: frozenZ }
+      : storyParcelAt(manifest, timeMs);
   const rigStates = useMemo(
     () =>
       Object.fromEntries(
@@ -258,7 +272,7 @@ function HiwScenePanel({
           found={decodeHl ? decodeHl.reader : null}
         />
       )}
-      {highlight === 'side-cameras' && (
+      {(highlight === 'side-cameras' || highlight === 'side-prep-frozen') && (
         <SideCameraCaptureHighlight selectedId={sideCamId} />
       )}
       {view === 'orbit' ? (
@@ -343,6 +357,20 @@ function HiwImagePanel({
           timeMs={timeMs}
           selectedId={sideCamId}
           onSelect={onSideCamSelect}
+        />
+      </section>
+    );
+  }
+  if (step.step === 6) {
+    return (
+      <section className="hiw-image-panel" data-testid="hiw-image-panel">
+        <div className="hiw-image-step" data-testid="image-panel-step">
+          Step 6 · side-image preparation
+        </div>
+        <Step6SidePrep
+          manifest={manifest}
+          timeMs={timeMs}
+          selectedId={sideCamId}
         />
       </section>
     );

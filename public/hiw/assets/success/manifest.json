@@ -43,7 +43,7 @@
         "detector": {
           "closeKernel": 15,
           "minArea": 1500,
-          "minColumnStdDev": 18.0,
+          "minColumnStdDev": 12.0,
           "threshold": 200
         }
       },
@@ -82,20 +82,20 @@
         "labelInstanceId": "L-side",
         "quadPx": [
           [
-            213,
-            106
+            464,
+            346
           ],
           [
-            358,
-            106
+            676,
+            346
           ],
           [
-            358,
-            195
+            676,
+            434
           ],
           [
-            213,
-            195
+            464,
+            434
           ]
         ],
         "source": "pixels"
@@ -120,7 +120,7 @@
         "detector": {
           "closeKernel": 15,
           "minArea": 1500,
-          "minColumnStdDev": 18.0,
+          "minColumnStdDev": 12.0,
           "threshold": 200
         }
       },
@@ -159,20 +159,20 @@
         "labelInstanceId": "L-side",
         "quadPx": [
           [
-            184,
-            105
+            453,
+            343
           ],
           [
-            271,
-            105
+            580,
+            343
           ],
           [
-            271,
-            198
+            580,
+            441
           ],
           [
-            184,
-            198
+            453,
+            441
           ]
         ],
         "source": "pixels"
@@ -197,7 +197,7 @@
         "detector": {
           "closeKernel": 15,
           "minArea": 1500,
-          "minColumnStdDev": 18.0,
+          "minColumnStdDev": 12.0,
           "threshold": 200
         }
       },
@@ -246,7 +246,7 @@
         "detector": {
           "closeKernel": 15,
           "minArea": 1500,
-          "minColumnStdDev": 18.0,
+          "minColumnStdDev": 12.0,
           "threshold": 200
         }
       },
@@ -295,7 +295,7 @@
         "detector": {
           "closeKernel": 15,
           "minArea": 1500,
-          "minColumnStdDev": 18.0,
+          "minColumnStdDev": 12.0,
           "threshold": 200
         }
       },
@@ -344,7 +344,7 @@
         "detector": {
           "closeKernel": 15,
           "minArea": 1500,
-          "minColumnStdDev": 18.0,
+          "minColumnStdDev": 12.0,
           "threshold": 200
         }
       },
@@ -393,7 +393,7 @@
         "detector": {
           "closeKernel": 15,
           "minArea": 1500,
-          "minColumnStdDev": 18.0,
+          "minColumnStdDev": 12.0,
           "threshold": 200
         }
       },

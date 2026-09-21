@@ -126,7 +126,10 @@ describe('lineScanHighlightAt / sceneHighlightAt (scene state at story time)', (
     expect(sceneHighlightAt(manifest, 0)).toBe('photoeye-entry');
     expect(sceneHighlightAt(manifest, 7500)).toBeNull(); // pre-crossing
     expect(sceneHighlightAt(manifest, 13750)).toBe('line-scan');
-    expect(sceneHighlightAt(manifest, 37500)).toBeNull();
+    // 37500 is the step 6 boundary — the frozen-pose highlight is active
+    // (just before, step 5's side-camera highlight is).
+    expect(sceneHighlightAt(manifest, 37_499)).toBe('side-cameras');
+    expect(sceneHighlightAt(manifest, 37_500)).toBe('side-prep-frozen');
   });
 });
 

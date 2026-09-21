@@ -28,9 +28,19 @@ Rendering
   FRONT face (visible to the 0° and 45° cameras), painter's algorithm.
   The four other side cameras (135°/180°/225°/270°) see the box WITHOUT a
   label (edge-on / hidden face) -> no candidate, no decode crop, no
-  expectedDecode. no-read fixtures: cam1 = glare blob over the label,
-  cam2 = label under a low-contrast shrink wrap (below the pixel-detection
-  threshold).
+  expectedDecode. no-read fixtures: cam1 = glare wash over the label
+  (strong enough that no decoder scanline survives — the pixel decode
+  really fails), cam2 = label under a low-contrast shrink wrap (below the
+  pixel-detection threshold -> geometry fallback candidate).
+
+Resolution: the AREA capture is the full-res sensor buffer (AREA_RES x the
+1140x960 display frame). Every stage the UI shows (raw, mask, gray, edge,
+overlay) is the display-resolution view; the rectified crop is cut from the
+FULL-RES buffer, exactly like a real camera's full-resolution decode input
+versus its scaled live preview. This keeps the bars above the sampling
+limit in both spaces (1-module bars are sub-pixel in the display frame,
+which is why cutting the crop from the display frame makes ZXing report
+NO_SYMBOL — verified, do not rectify from the display resolution).
 
 Stage chain per capture (mirrors the live pipeline order):
     raw -> maskedCrop -> grayscaleContrast -> edgeMap -> candidateOverlay
@@ -58,7 +68,10 @@ REPO = Path(__file__).resolve().parent.parent
 SPEC_PATH = REPO / "scripts" / "hiw-asset-spec.json"
 DEFAULT_OUT = REPO / "public"
 
-IMG_W, IMG_H = 570, 480          # area frames (TS fixture quads live in this space)
+# area frame DISPLAY size (2x the original 570x480; manifest quads and all
+# stage tiles live in this space). The full-res sensor buffer is AREA_RES x
+# this (see render_area_frame) — the decode crop is cut from there.
+IMG_W, IMG_H = 1140, 960
 STRIP_W, STRIP_H = 570, 560      # line-scan strips (x = belt cross, y = travel)
 
 # Deterministic scene constants (no clocks, no env reads)
@@ -289,14 +302,17 @@ def _look_at(cam_pos: np.ndarray, target: np.ndarray):
     return cam_pos, right, up, fwd
 
 
-def project(pts: np.ndarray, cam_pos, right, up, fwd) -> tuple[np.ndarray, np.ndarray]:
+def project(
+    pts: np.ndarray, cam_pos, right, up, fwd, intr: dict | None = None
+) -> tuple[np.ndarray, np.ndarray]:
     """World pts (N,3) -> (image xy (N,2), depth (N,))."""
+    i = intr or CAM
     rel = pts - cam_pos
     x = rel @ right
     y = rel @ up
     z = rel @ fwd
-    fx = CAM["focal"] * x / z + CAM["cx"]
-    fy = -CAM["focal"] * y / z + CAM["cy"]
+    fx = i["focal"] * x / z + i["cx"]
+    fy = -i["focal"] * y / z + i["cy"]
     return np.column_stack([fx, fy]), z
 
 
@@ -336,12 +352,19 @@ def label_face_corners(center: np.ndarray, azimuth_deg: float) -> np.ndarray:
         [[np.cos(th), 0.0, -np.sin(th)], [0.0, 1.0, 0.0], [np.sin(th), 0.0, np.cos(th)]]
     )
     hw, hh = BOX_W / 2, BOX_H / 2
-    u0, u1 = -0.30 * BOX_W, 0.30 * BOX_W
+    # Label spans ~88% of the face width x ~48% of the face height. Module
+    # size is fixed by the payload (149.6 mm / 209 modules = 0.716 mm/module
+    # at 88% width); the decode resolution comes from the full-res buffer,
+    # not from the label size here — see render_area_frame.
+    u0, u1 = -0.44 * BOX_W, 0.44 * BOX_W
     v0, v1 = 0.30 * BOX_H, 0.78 * BOX_H
     local = np.array(
         [[u0, v0, hh + 0.5], [u1, v0, hh + 0.5], [u1, v1, hh + 0.5], [u0, v1, hh + 0.5]]
     )
     return (local + center) @ rot.T
+
+
+AREA_RES = 4  # full-res sensor buffer = AREA_RES x the display frame
 
 
 def render_area_frame(
@@ -350,28 +373,50 @@ def render_area_frame(
     cam_key: str,
     label: str,  # 'none' | 'clean' | 'glare' | 'wrapped'
     seed: int,
-) -> np.ndarray:
+    res: int = AREA_RES,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Render one side-camera area capture.
+
+    Returns (display, full_res, label_quad_display). The capture is rendered
+    at AREA_RES x resolution (full-res sensor buffer) and box-downsampled
+    (INTER_AREA) to the display frame — correct camera optics. The label is
+    sub-pixel in the display frame (~1 px/module); the full-res buffer keeps
+    the bar pattern above the sampling limit (~3.9 px/module) so the
+    rectified crop — cut from the full-res buffer — decodes with zxing-cpp
+    (verified: crops cut from the display frame fail with NO_SYMBOL).
+
+    label_quad_display: projected label corners in DISPLAY space (None when
+    the label face is not visible to this camera). Used for the geometry
+    fallback candidate so it always matches the rendered label position.
+    """
     cam_pos = np.array(CAM[cam_key])
     target = np.array([0.0, 55.0, 0.0])
     _, right, up, fwd = _look_at(cam_pos, target)
+    W, H = IMG_W * res, IMG_H * res
+    belt_y = 680 * res
+    intr = {
+        "focal": CAM["focal"] * res,
+        "cx": CAM["cx"] * res,
+        "cy": CAM["cy"] * res,
+    }
 
-    img = base_canvas(IMG_W, IMG_H, BG, seed)
+    img = base_canvas(W, H, BG, seed)
     # conveyor belt
-    belt = np.array([[0, 340], [IMG_W, 340], [IMG_W, IMG_H], [0, IMG_H]], dtype=np.int32)
+    belt = np.array([[0, belt_y], [W, belt_y], [W, H], [0, H]], dtype=np.int32)
     cv2.fillPoly(img, [belt], tuple(int(v) for v in BELT))
     rng = np.random.default_rng(seed + 1)
-    noise = rng.normal(0.0, 1.5, (IMG_H - 340, IMG_W))
-    img[340:] = np.clip(img[340:].astype(float) + noise[..., None], 0, 255).astype(np.uint8)
+    noise = rng.normal(0.0, 1.5, (H - belt_y, W))
+    img[belt_y:] = np.clip(img[belt_y:].astype(float) + noise[..., None], 0, 255).astype(np.uint8)
 
     faces = box_faces(np.array([0.0, BOX_H / 2, 0.0]), azimuth_deg)
     # painter's algorithm: farthest first, cull back-facing
     order = sorted(
         faces.items(),
-        key=lambda kv: project(kv[1][0], cam_pos, right, up, fwd)[1].mean(),
+        key=lambda kv: project(kv[1][0], cam_pos, right, up, fwd, intr)[1].mean(),
         reverse=True,
     )
     for name, (corners, shade) in order:
-        xy, z = project(corners, cam_pos, right, up, fwd)
+        xy, z = project(corners, cam_pos, right, up, fwd, intr)
         if z.min() <= 0:
             continue
         normal = np.cross(corners[1] - corners[0], corners[2] - corners[0])
@@ -381,10 +426,12 @@ def render_area_frame(
         col = tuple(int(v) for v in np.clip(KRAFT * shade, 0, 255))
         cv2.fillPoly(img, [xy.astype(np.int32)], col)
 
+    label_quad_display: np.ndarray | None = None
     if label != "none" and azimuth_deg <= 45.0 + 1e-6:
         label_world = label_face_corners(np.array([0.0, BOX_H / 2, 0.0]), azimuth_deg)
-        xy, z = project(label_world, cam_pos, right, up, fwd)
+        xy, z = project(label_world, cam_pos, right, up, fwd, intr)
         if z.min() > 0:
+            label_quad_display = (xy / res).astype(np.float32)
             bc = render_barcode(payload, 3)  # 3 px/module
             src = np.array(
                 [
@@ -397,26 +444,44 @@ def render_area_frame(
             )
             m = cv2.getPerspectiveTransform(src, xy.astype(np.float32))
             white = np.dstack([bc, bc, bc])
-            warped = cv2.warpPerspective(white, m, (IMG_W, IMG_H), flags=cv2.INTER_LINEAR)
+            # ~1:1 warp at the 4x internal resolution (627 px source onto a
+            # ~580 px quad) — plain linear is exact enough; the optical
+            # downsample happens at the end of this function.
+            warped = cv2.warpPerspective(white, m, (W, H), flags=cv2.INTER_LINEAR)
             mask = cv2.warpPerspective(
-                np.full(bc.shape, 255, np.uint8), m, (IMG_W, IMG_H), flags=cv2.INTER_NEAREST
+                np.full(bc.shape, 255, np.uint8), m, (W, H), flags=cv2.INTER_NEAREST
             )
             ok = mask > 0
             img[ok] = warped[ok]
 
             if label == "glare":
+                # The glare must make the PIXEL DECODE fail (not just look
+                # bad): wash the whole label so every bar rises above the
+                # 128 binarization edge, then add a hot central disc. A
+                # partial wash leaves clean scanlines near the label edge
+                # and zxing-cpp still decodes (verified, do not weaken).
+                img[ok] = (0.30 * warped[ok].astype(float) + 0.70 * 255.0).astype(np.uint8)
                 cx, cy = int(xy.mean(axis=0)[0]), int(xy.mean(axis=0)[1])
-                ys, xs = np.mgrid[0:IMG_H, 0:IMG_W]
+                ys, xs = np.mgrid[0:H, 0:W]
                 d = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
                 r = max(xy[:, 0].max() - xy[:, 0].min(), xy[:, 1].max() - xy[:, 1].min())
-                g = np.clip(1.0 - d / (0.75 * r), 0.0, 1.0) * 0.9
-                img = np.clip(img.astype(float) + g[..., None] * 200, 0, 255).astype(np.uint8)
+                g = np.clip(1.0 - d / (1.15 * r), 0.0, 1.0) ** 1.5
+                img = np.clip(img.astype(float) + g[..., None] * 140, 0, 255).astype(np.uint8)
             elif label == "wrapped":
                 # low-contrast shrink wash: pull the label toward the kraft tone
-                # (kraft under the label = KRAFT; front face shade factor is 1.0)
+                # (kraft under the label = KRAFT; front face shade factor is 1.0).
+                # Coefficient 0.15 is the verified sweet spot: the washed
+                # symbol's bar/space contrast (38 gray levels) is below what
+                # zxing-cpp can read (0.18 still decodes), and the washed
+                # whites (max ~183) stay under the detection threshold (200)
+                # so the geometry fallback candidate is used.
                 wash = KRAFT + 28.0
-                img[ok] = (0.30 * warped[ok].astype(float) + 0.70 * wash).astype(np.uint8)
-    return img
+                img[ok] = (0.15 * warped[ok].astype(float) + 0.85 * wash).astype(np.uint8)
+    if res > 1:
+        display = cv2.resize(img, (IMG_W, IMG_H), interpolation=cv2.INTER_AREA)
+    else:
+        display = img
+    return display, img, label_quad_display
 
 
 def render_top_strip(payload: str, seed: int) -> np.ndarray:
@@ -443,7 +508,13 @@ def render_top_strip(payload: str, seed: int) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 DETECT_MIN_AREA = 60 * 25
-DETECT_MIN_COL_STD = 18.0
+# Column-profile structure gate. A glare wash can push the whole label above
+# the threshold while the bars only survive faintly near the edges (col std
+# ~13 on the generated glare fixture) — the detector must still find the
+# candidate there (the story is: candidate found, pixel decode fails with an
+# explicit reason). The wrapped no-read label never forms a blob at all
+# (max gray ~188 < threshold), so this gate does not protect it.
+DETECT_MIN_COL_STD = 12.0
 DETECT_THRESHOLD = 200
 DETECT_CLOSE_KERNEL = 15
 
@@ -527,33 +598,65 @@ def sha256_file(p: Path) -> str:
 STAGE_FILES = ["raw", "maskedCrop", "grayscaleContrast", "edgeMap", "candidateOverlay", "rectifiedCrop"]
 
 
-def build_capture(spec_cap: dict, raw: np.ndarray, poly: np.ndarray | None, out_dir: Path) -> dict:
+def build_capture(
+    spec_cap: dict,
+    raw: np.ndarray,
+    poly: np.ndarray | None,
+    out_dir: Path,
+    payload: str | None = None,
+    raw_fullres: np.ndarray | None = None,
+    quad_fullres: np.ndarray | None = None,
+    geom_quad_display: np.ndarray | None = None,
+) -> dict:
     detected = detect_candidate(raw)
     if detected is not None:
         quad, source = detected, "pixels"
+        full_quad = (
+            detected * AREA_RES if raw_fullres is not None else None
+        )
+    elif geom_quad_display is not None:
+        # AREA capture whose label is below the detection threshold (e.g.
+        # the wrapped no-read label): projected label corners (geometry,
+        # not pixels) — always matches the rendered label position.
+        quad, source = geom_quad_display, "geometry"
+        full_quad = quad_fullres
     elif "candidate" in spec_cap:
         quad = np.array(spec_cap["candidate"]["quadPx"], dtype=np.float32)
         source = "geometry"
+        full_quad = None
     else:
         # No label in frame AND the spec declares no candidate: the camera
         # sees the parcel from an angle with no label. No candidate, no
         # decode crop, no expectedDecode.
-        quad, source = None, None
+        quad, source, full_quad = None, None, None
     (out_dir / "raw.png").write_bytes(_png(raw))
     if quad is not None:
         stages = stage_stages(raw, quad, poly)
         for name, img in stages.items():
             (out_dir / f"{name}.png").write_bytes(_png(img))
         # aspect-preserving rectify to a fixed width, so barcode modules land at
-        # a ZXing-friendly scale (~7 px/module). NOTE: the quad covers the whole
-        # label (quiet zone included), so a smaller width leaves bars sub-module
-        # wide (verified: 700 px -> 3 px bars -> ZXing Code128 fails).
-        x0 = quad[:, 0].min(); x1 = quad[:, 0].max()
-        y0 = quad[:, 1].min(); y1 = quad[:, 1].max()
+        # a ZXing-friendly scale (~6 px/module). AREA captures cut the crop
+        # from the full-res sensor buffer (see render_area_frame); strips
+        # rectify from the strip itself.
+        src, q = (raw_fullres, full_quad) if full_quad is not None else (raw, quad)
+        x0 = q[:, 0].min(); x1 = q[:, 0].max()
+        y0 = q[:, 1].min(); y1 = q[:, 1].max()
         decode_w = 1300
         scale = decode_w / max(x1 - x0, 1)
         decode_h = max(60, int(round((y1 - y0) * scale)))
-        crop = rectify(raw, quad, decode_w, decode_h)
+        crop = rectify(src, q, decode_w, decode_h)
+        # ISO 15417 quiet zone: the box-printed label only carries a
+        # horizontal quiet zone (bars run the full label height) and
+        # zxing-cpp reports NO_SYMBOL on the bare rectified side crop
+        # (verified). Pad the decode input with a white quiet zone on all
+        # sides — a standard pre-decode step in real pipelines.
+        if payload is not None:
+            total_modules = QUIET_MODULES * 2 + sum(code128_elements(payload))
+            mod_px = decode_w / total_modules
+            pad = max(32, int(round(11 * mod_px)))
+            crop = cv2.copyMakeBorder(
+                crop, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=(255, 255, 255)
+            )
         crop_bytes = _png(crop)
         (out_dir / "rectifiedCrop.png").write_bytes(crop_bytes)  # == decode input
         (out_dir / "decode-crop.png").write_bytes(crop_bytes)
@@ -720,6 +823,8 @@ def gen_fixture(spec_fix: dict, fixture_id: str, out_root: Path) -> Path:
             seed = 1000 + sum(ord(ch) for ch in cap["sensorId"]) % 1000
             raw = render_top_strip(face_payloads["TOP"], seed)
             poly = parcel_mask_poly(area=False, azimuth_deg=0.0)
+            area_payload = None
+            captures.append(build_capture(cap, raw, poly, cap_out, area_payload))
         else:
             azimuth, cam_key = SIDE_CAM_VIEW[cap["sensorId"]]
             if fixture_id == "no-read":
@@ -727,9 +832,23 @@ def gen_fixture(spec_fix: dict, fixture_id: str, out_root: Path) -> Path:
                     "wrapped" if cap["sensorId"] == "cam-side-2" else "none")
             else:
                 label = "clean"
-            raw = render_area_frame(face_payloads["FRONT"], azimuth, cam_key, label, seed=2000)
+            raw, full_res, geom_quad = render_area_frame(
+                face_payloads["FRONT"], azimuth, cam_key, label, seed=2000
+            )
+            geom_quad_full = geom_quad * AREA_RES if geom_quad is not None else None
             poly = parcel_mask_poly(area=True, azimuth_deg=azimuth)
-        captures.append(build_capture(cap, raw, poly, cap_out))
+            captures.append(
+                build_capture(
+                    cap,
+                    raw,
+                    poly,
+                    cap_out,
+                    face_payloads["FRONT"],
+                    full_res,
+                    geom_quad_full,
+                    geom_quad,
+                )
+            )
     m = build_manifest(spec_fix, fixture_id, captures)
     (out_dir / "manifest.json").write_text(json.dumps(m, sort_keys=True, indent=2) + "\n")
     return out_dir

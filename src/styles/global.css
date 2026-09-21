@@ -1892,6 +1892,93 @@ body {
   color: #e3a008;
 }
 
+/* ---- Step 6: side-image preparation (t5-1) ---- */
+
+.step6-prep {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step6-frozen {
+  color: #79c0ff;
+  font-size: 0.82em;
+  margin: 0;
+}
+
+.step6-flags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.step6-flag {
+  padding: 3px 8px;
+  border: 1px solid #e3a008;
+  border-radius: 4px;
+  background: #0d1117;
+  color: #e3a008;
+  font-family: var(--mono, monospace);
+  font-size: 0.75em;
+}
+
+.step6-crop {
+  margin: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+.step6-crop img {
+  display: block;
+  max-width: 100%;
+}
+
+.step6-crop figcaption {
+  padding: 6px 10px;
+  color: var(--text-dim);
+  font-size: 0.78em;
+}
+
+.step6-no-crop {
+  padding: 8px 12px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+.step6-value {
+  padding: 8px 12px;
+  border: 1px solid #3fb950;
+  border-radius: 6px;
+  background: #0d1117;
+  font-family: var(--mono, monospace);
+  font-size: 1.05em;
+  color: #7ee787;
+}
+
+.step6-no-read {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid #e3a008;
+  border-radius: 6px;
+  background: #0d1117;
+}
+
+.step6-no-read-label {
+  color: #e3a008;
+  font-weight: 600;
+}
+
+.step6-reason {
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
 /* ---- Step 3: line-scan preparation stages (t3-3) ---- */
 
 .step3-prep {
