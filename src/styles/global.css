@@ -1723,6 +1723,63 @@ body {
   padding: 2px 6px;
 }
 
+/* ---- Step 1: parcel entry (t2-3) ---- */
+
+.step1-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.step1-arming {
+  padding: 12px 14px;
+  border: 1px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+.step1-encoder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85em;
+  color: var(--text-dim);
+}
+
+.step1-encoder-ruler {
+  flex: 1;
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+}
+
+.step1-encoder-marker {
+  position: absolute;
+  top: -3px;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
+
+.step1-entry-status {
+  padding: 8px 12px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+.step1-entry-status-in {
+  border: 1px solid var(--ok);
+  color: var(--ok);
+}
+
 @media (max-width: 1023px) {
   .hiw-panels {
     grid-template-columns: 1fr;

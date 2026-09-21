@@ -29,6 +29,12 @@ import { ParcelScene } from '../../scene/parcel';
 import type { ReplayManifest, CaptureRecord } from './replayManifest';
 import { REPLAY_FIXTURES, type FixtureId } from './fixtures';
 import {
+  Step1Entry,
+  PhotoeyeEntryHighlight,
+  sceneHighlightAt,
+  hasCrossedPhotoeye,
+} from './step1Entry';
+import {
   usePlayback,
   stepIndexAt,
   type PlaybackSpeed,
@@ -175,6 +181,7 @@ function HiwScenePanel({
   view: HiwViewPreset;
 }) {
   const config = useMemo(() => defaultConfig(), []);
+  const photoeyeHighlight = sceneHighlightAt(manifest, timeMs) === 'photoeye-entry';
   const stepIdx = stepIndexAt(manifest.steps, manifest.durationMs, timeMs);
   const activeSensors = manifest.steps[stepIdx]?.sensorIds ?? [];
   const highlightId =
@@ -216,6 +223,7 @@ function HiwScenePanel({
         onSelect={() => undefined}
       />
       <ParcelScene state={parcel} />
+      {photoeyeHighlight && <PhotoeyeEntryHighlight beltWidthMm={config.belt.widthMm} />}
       {view === 'orbit' ? (
         <>
           <gridHelper args={[8, 40, '#2f3740', '#222831']} position={[0, -0.8, 1.1]} />
@@ -243,6 +251,16 @@ function HiwImagePanel({
 }) {
   const stepIdx = stepIndexAt(manifest.steps, manifest.durationMs, timeMs);
   const step = manifest.steps[stepIdx];
+  if (step.step === 1) {
+    return (
+      <section className="hiw-image-panel" data-testid="hiw-image-panel">
+        <div className="hiw-image-step" data-testid="image-panel-step">
+          Step 1 · parcel entry
+        </div>
+        <Step1Entry manifest={manifest} timeMs={timeMs} />
+      </section>
+    );
+  }
   const capture: CaptureRecord | undefined = manifest.captures.find(
     (c) => c.captureId === step.captureId,
   );
@@ -294,6 +312,9 @@ export function HiwShell({
   const stepIdx = stepIndexAt(manifest.steps, manifest.durationMs, playback.timeMs);
   const activeStep = stepIdx + 1;
   const [viewPreset, setViewPreset] = useState<HiwViewPreset>('orbit');
+  // The chip populates only once the parcel crosses the entry photoeye.
+  const entered = hasCrossedPhotoeye(manifest.keyframes, playback.timeMs);
+  const chipText = entered ? manifest.parcel.parcelId : '— awaiting entry —';
 
   return (
     <div className="hiw-shell" data-testid="hiw-shell">
@@ -383,7 +404,7 @@ export function HiwShell({
             timeMs={playback.timeMs}
             playing={playback.playing}
             speed={playback.speed}
-            parcelId={manifest.parcel.parcelId}
+            parcelId={chipText}
             onScrub={(t) => store.scrub(t)}
             onSeekStep={(n) => store.seekStep(manifest.steps, n)}
             onTogglePlay={() => store.toggle()}

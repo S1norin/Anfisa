@@ -66,13 +66,28 @@ describe('HowItWorksView shell (t2-2)', () => {
     expect(activeStep()).toBe(1);
   });
 
-  it('parcel chip shows the story parcel on every step', () => {
+  it('parcel chip: masked until the entry crossing, then populated for every later step', () => {
     render(<HowItWorksView />);
     const chip = screen.getByTestId('parcel-chip');
-    for (let n = 1; n <= 8; n++) {
+    // Steps 1-2: parcel front is still short of the entry photoeye (z=0).
+    scrubTo(1);
+    expect(chip).toHaveTextContent('awaiting entry');
+    scrubTo(2);
+    expect(chip).toHaveTextContent('awaiting entry');
+    // From step 3 on (front past z=0) the chip carries the parcel id.
+    for (let n = 3; n <= 8; n++) {
       scrubTo(n);
       expect(chip).toHaveTextContent(manifest.parcel.parcelId);
     }
+  });
+
+  it('step 1: right panel shows the arming state with encoder ruler and no image', () => {
+    render(<HowItWorksView />);
+    scrubTo(1);
+    expect(screen.getByTestId('step1-entry')).toBeTruthy();
+    expect(screen.getByTestId('step1-arming')).toHaveTextContent('no image yet');
+    expect(screen.getByTestId('step1-encoder-ruler')).toBeTruthy();
+    expect(screen.queryByTestId('image-panel-capture')).toBeNull();
   });
 
   it('transport: step-fwd/restart/scrub drive the shared clock', () => {
@@ -122,9 +137,14 @@ describe('HowItWorksView shell (t2-2)', () => {
     fireEvent.change(screen.getByTestId('fixture-select'), {
       target: { value: 'no-read' },
     });
+    // Clock restarts at t=0: chip masked again, step 1 active.
+    expect(activeStep()).toBe(1);
+    expect(screen.getByTestId('parcel-chip')).toHaveTextContent(
+      'awaiting entry',
+    );
+    scrubTo(3);
     expect(screen.getByTestId('parcel-chip')).toHaveTextContent(
       'PARCEL-2026-0002',
     );
-    expect(activeStep()).toBe(1);
   });
 });
