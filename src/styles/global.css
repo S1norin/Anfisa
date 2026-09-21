@@ -1392,3 +1392,343 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* =================== How It Works shell (t2-2) =================== */
+
+.hiw-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.hiw-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hiw-topbar h2 {
+  margin: 0;
+}
+
+.hiw-fixture-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+}
+
+.hiw-fixture-select select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.hiw-mode-switch {
+  margin-left: auto;
+  display: flex;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.hiw-mode-switch button {
+  padding: 6px 14px;
+  background: var(--panel);
+  color: var(--text-dim);
+  border: none;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.hiw-mode-switch button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #0b1016;
+  font-weight: 600;
+}
+
+.hiw-panels {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 420px;
+}
+
+.hiw-3d-panel {
+  position: relative;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #161a20;
+  min-height: 380px;
+}
+
+.hiw-3d-panel canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hiw-scene-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.9em;
+}
+
+.hiw-view-presets {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+.hiw-view-presets button {
+  padding: 3px 10px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  color: var(--text-dim);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75em;
+  text-transform: capitalize;
+}
+
+.hiw-view-presets button[aria-pressed='true'] {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.hiw-image-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 14px 16px;
+  overflow: auto;
+}
+
+.hiw-image-step {
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+.hiw-image-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 200px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 6px;
+  padding: 14px;
+}
+
+.hiw-image-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--text-dim);
+  font-size: 0.8em;
+}
+
+.hiw-image-note {
+  margin: auto 0 0;
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+
+.hiw-live-unavailable {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 1.05em;
+  padding: 24px;
+  text-align: center;
+}
+
+/* ---- Story timeline (bottom strip) ---- */
+
+.story-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px 12px;
+}
+
+.story-chip {
+  align-self: flex-start;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.story-chip-label {
+  color: var(--text-dim);
+  font-weight: 400;
+  text-transform: lowercase;
+}
+
+.story-track {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.story-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 2px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+
+.story-step-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.8em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.story-step-title {
+  font-size: 0.68em;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.story-lane {
+  font-size: 0.6em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.story-lane-line {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.story-lane-area {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+
+.story-merge-tag {
+  font-size: 0.6em;
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+.story-step-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.story-step-active .story-step-btn {
+  background: var(--accent);
+  color: #0b1016;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.story-step-active .story-step-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.story-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.story-ctrl {
+  width: 30px;
+  height: 28px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.85em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.story-ctrl-play {
+  width: 40px;
+  border-color: var(--accent);
+}
+
+.story-scrub {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--accent);
+}
+
+.story-speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 0.8em;
+}
+
+.story-speed select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+@media (max-width: 1023px) {
+  .hiw-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .hiw-3d-panel {
+    min-height: 300px;
+  }
+}

@@ -1,127 +1,130 @@
 /**
- * HowItWorksView (t12): route + nav order, step rail (11 buttons,
- * aria-current, Left/Right keys), parcel selector (follow-newest default,
- * switch to an older parcel), sim invariance across navigation, and the
- * technical-details / accuracy-callout disclosures.
+ * HowItWorksView (t2-2): the guided-replay shell — 3-panel layout,
+ * 8-step storyboard timeline with the line-scan / 2D-camera branch and
+ * merge at step 7, one shared clock driven by the transport, the parcel
+ * chip on every step, and the Guided Replay / Live Processing mode
+ * switch (Live = explicit "not available yet" until P7).
  */
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from '../../App';
-import { simStore } from '../../store/simStore';
-import { PROCESS_GUIDE } from '../process/processGuide';
+import { buildSuccessManifest } from '../howItWorks/fixtures';
 import { HowItWorksView } from './howItWorksView';
 
-const PARCELS_NEEDED = 2;
+const STEP_MS = 7500;
+const manifest = buildSuccessManifest();
 
-function seedParcels(n: number): void {
-  simStore.reset();
-  simStore.start();
-  let guard = 0;
-  while (simStore.sim.state.parcels.size < n && guard++ < 5000) {
-    simStore.tick(16);
+function activeStep(): number {
+  for (let n = 1; n <= 8; n++) {
+    if (screen.getByTestId(`step-${n}`).classList.contains('story-step-active')) {
+      return n;
+    }
   }
-  simStore.pause();
+  throw new Error('no active step found');
+}
+
+function scrubTo(step: number): void {
+  const scrub = screen.getByTestId('scrub') as HTMLInputElement;
+  fireEvent.change(scrub, { target: { value: (step - 1) * STEP_MS } });
 }
 
 beforeEach(() => {
-  simStore.reset();
   window.location.hash = '';
 });
 
-describe('HowItWorksView (t12)', () => {
+describe('HowItWorksView shell (t2-2)', () => {
   it('mounts #/how-it-works and is the only top-nav link (t2-1)', () => {
     window.location.hash = '#/how-it-works';
     render(<App />);
     const nav = document.querySelector('nav[aria-label="Primary"]')!;
-    const labels = [...nav.querySelectorAll('li')].map(
-      (li) => li.textContent,
-    );
+    const labels = [...nav.querySelectorAll('li')].map((li) => li.textContent);
     expect(labels).toEqual(['How It Works']);
     expect(screen.getByTestId('how-it-works-view')).toBeTruthy();
   });
 
-  it('step rail: 11 real buttons; current step carries aria-current="step"', () => {
+  it('renders the 3-panel shell (3D, image, timeline); jsdom gets the scene fallback', () => {
     render(<HowItWorksView />);
-    const buttons = screen.getAllByRole('button');
-    const stepButtons = buttons.filter((b) =>
-      PROCESS_GUIDE.some((s) => b.dataset.testid === `step-${s.id}`),
+    expect(screen.getByTestId('hiw-3d-panel')).toBeTruthy();
+    expect(screen.getByTestId('hiw-image-panel')).toBeTruthy();
+    expect(screen.getByTestId('story-timeline')).toBeTruthy();
+    // jsdom has no WebGL: the 3D panel degrades to the explicit fallback.
+    expect(screen.getByTestId('hiw-scene-fallback')).toBeTruthy();
+  });
+
+  it('timeline: 8 numbered steps, line-scan and 2D lanes, merge at step 7', () => {
+    render(<HowItWorksView />);
+    for (let n = 1; n <= 8; n++) {
+      expect(screen.getByTestId(`step-${n}`)).toBeTruthy();
+    }
+    expect(screen.getByTestId('step-3').textContent).toContain('line scan');
+    expect(screen.getByTestId('step-4').textContent).toContain('line scan');
+    expect(screen.getByTestId('step-5').textContent).toContain('2D camera');
+    expect(screen.getByTestId('step-6').textContent).toContain('2D camera');
+    expect(screen.getByTestId('step-7').textContent).toContain('merge');
+    // Step 1 is active at t=0.
+    expect(activeStep()).toBe(1);
+  });
+
+  it('parcel chip shows the story parcel on every step', () => {
+    render(<HowItWorksView />);
+    const chip = screen.getByTestId('parcel-chip');
+    for (let n = 1; n <= 8; n++) {
+      scrubTo(n);
+      expect(chip).toHaveTextContent(manifest.parcel.parcelId);
+    }
+  });
+
+  it('transport: step-fwd/restart/scrub drive the shared clock', () => {
+    render(<HowItWorksView />);
+    expect(activeStep()).toBe(1);
+    fireEvent.click(screen.getByTestId('ctrl-step-fwd'));
+    expect(activeStep()).toBe(2);
+    fireEvent.click(screen.getByTestId('ctrl-step-fwd'));
+    expect(activeStep()).toBe(3);
+    fireEvent.click(screen.getByTestId('ctrl-restart'));
+    expect(activeStep()).toBe(1);
+    scrubTo(5);
+    expect(activeStep()).toBe(5);
+    // The image panel follows the clock: step 5 is the side-camera capture.
+    expect(screen.getByTestId('image-panel-capture')).toHaveTextContent(
+      'cap-cam-1-01',
     );
-    expect(stepButtons).toHaveLength(PROCESS_GUIDE.length);
-    expect(stepButtons.every((b) => b.tagName === 'BUTTON')).toBe(true);
-    expect(
-      screen.getByTestId(`step-${PROCESS_GUIDE[0].id}`),
-    ).toHaveAttribute('aria-current', 'step');
+    // Step 1 has no capture.
+    scrubTo(1);
+    expect(screen.queryByTestId('image-panel-capture')).toBeNull();
   });
 
-  it('step rail: Left/Right arrow keys move to prev/next', () => {
+  it('mode switch: live shows the unavailable placeholder; guided stays usable', () => {
     render(<HowItWorksView />);
-    const rail = screen.getByTestId('process-step-rail');
-    // Starts at step 1 (index 0): ArrowRight → index 1, ArrowLeft → index 0.
-    fireEvent.keyDown(rail, { key: 'ArrowRight' });
-    expect(
-      screen.getByTestId(`step-${PROCESS_GUIDE[1].id}`),
-    ).toHaveAttribute('aria-current', 'step');
-    fireEvent.keyDown(rail, { key: 'ArrowLeft' });
-    expect(
-      screen.getByTestId(`step-${PROCESS_GUIDE[0].id}`),
-    ).toHaveAttribute('aria-current', 'step');
-  });
-
-  it('parcel selector defaults to follow-newest and shows the newest parcel', () => {
-    seedParcels(PARCELS_NEEDED);
-    const parcels = [...simStore.sim.state.parcels.values()];
-    render(<HowItWorksView />);
-    const select = screen.getByTestId('parcel-select') as HTMLSelectElement;
-    expect(select.value).toBe('__follow_newest__');
-    expect(screen.getByTestId('evidence-parcel')).toHaveTextContent(
-      parcels[parcels.length - 1].parcelId,
+    expect(screen.getByTestId('mode-guided')).toHaveAttribute(
+      'aria-pressed',
+      'true',
     );
+    fireEvent.click(screen.getByTestId('mode-live'));
+    expect(screen.getByTestId('mode-live')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByTestId('live-unavailable')).toBeTruthy();
+    expect(screen.queryByTestId('hiw-3d-panel')).toBeNull();
+    expect(screen.queryByTestId('story-timeline')).toBeNull();
+    fireEvent.click(screen.getByTestId('mode-guided'));
+    expect(screen.getByTestId('hiw-3d-panel')).toBeTruthy();
+    expect(screen.getByTestId('story-timeline')).toBeTruthy();
+    expect(screen.queryByTestId('live-unavailable')).toBeNull();
   });
 
-  it('selecting an older parcel switches the evidence cards to it', () => {
-    seedParcels(PARCELS_NEEDED);
-    const parcels = [...simStore.sim.state.parcels.values()];
-    const older = parcels[0].parcelId;
+  it('fixture switch restarts the clock and swaps the story parcel', () => {
     render(<HowItWorksView />);
-    fireEvent.change(screen.getByTestId('parcel-select'), {
-      target: { value: older },
+    scrubTo(4);
+    expect(activeStep()).toBe(4);
+    fireEvent.change(screen.getByTestId('fixture-select'), {
+      target: { value: 'no-read' },
     });
-    expect(screen.getByTestId('evidence-parcel')).toHaveTextContent(older);
-    // The first stage (created) is complete for every spawned parcel.
-    expect(screen.getByTestId('evidence-created')).toHaveAttribute(
-      'data-status',
-      'complete',
+    expect(screen.getByTestId('parcel-chip')).toHaveTextContent(
+      'PARCEL-2026-0002',
     );
-  });
-
-  it('navigating to and from the view does not mutate the simulation', () => {
-    seedParcels(1);
-    const versionBefore = simStore.getState().version;
-    window.location.hash = '#/how-it-works';
-    const { unmount } = render(<App />);
-    unmount();
-    expect(simStore.getState().version).toBe(versionBefore);
-  });
-
-  it('technical details disclosure and accuracy callout render', () => {
-    render(<HowItWorksView />);
-    expect(screen.getByTestId('accuracy-callout')).toBeTruthy();
-    const toggle = screen.getByTestId('technical-toggle');
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByTestId('technical-details')).toBeNull();
-    fireEvent.click(toggle);
-    expect(screen.getByTestId('technical-details')).toBeTruthy();
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  });
-
-  it('running/paused indicator reflects the sim status', () => {
-    seedParcels(1); // ends paused
-    render(<HowItWorksView />);
-    expect(screen.getByTestId('run-indicator')).toHaveTextContent('paused');
-    act(() => {
-      simStore.start();
-    });
-    expect(screen.getByTestId('run-indicator')).toHaveTextContent('running');
+    expect(activeStep()).toBe(1);
   });
 });
