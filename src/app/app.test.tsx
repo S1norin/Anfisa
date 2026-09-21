@@ -7,22 +7,35 @@ describe('App shell', () => {
     expect(screen.getByTestId('app-title')).toHaveTextContent('Anfisa');
   });
 
-  it('renders navigation to all four views', () => {
+  it('renders exactly one nav link (How it works)', () => {
     render(<App />);
     const nav = document.querySelector('nav[aria-label="Primary"]')!;
-    expect(nav).toHaveTextContent('Operations');
-    expect(nav).toHaveTextContent('Camera Lab');
-    expect(nav).toHaveTextContent('Schema');
-    expect(nav).toHaveTextContent('Metrics');
+    const links = nav.querySelectorAll('a');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveTextContent('How It Works');
   });
 
-  it('defaults to the Operations view', () => {
+  it('defaults to the How It Works view', () => {
+    render(<App />);
+    expect(screen.getByTestId('how-it-works-view')).toBeInTheDocument();
+  });
+
+  it('deep link: #/operations still renders the Operations view', () => {
+    window.location.hash = '#/operations';
     render(<App />);
     expect(screen.getByTestId('operations-view')).toBeInTheDocument();
   });
 
-  it('renders the 3D canvas area on the Operations view (fallback without WebGL)', () => {
-    render(<App />);
-    expect(screen.getByTestId('scene-canvas-fallback')).toBeInTheDocument();
+  it('deep link: #/camera-lab, #/schema, #/metrics still render without error', () => {
+    for (const [hash, testid] of [
+      ['#/camera-lab', 'camera-lab-view'],
+      ['#/schema', 'schema-view'],
+      ['#/metrics', 'metrics-view'],
+    ] as const) {
+      window.location.hash = hash;
+      const { unmount } = render(<App />);
+      expect(screen.getByTestId(testid)).toBeInTheDocument();
+      unmount();
+    }
   });
 });

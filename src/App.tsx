@@ -37,13 +37,13 @@ export function App() {
       <HashRouter>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route index element={<Navigate to="/operations" replace />} />
+            <Route index element={<Navigate to="/how-it-works" replace />} />
             <Route path="/operations" element={<OperationsView />} />
             <Route path="/camera-lab" element={<CameraLabView />} />
             <Route path="/schema" element={<SchemaView />} />
             <Route path="/how-it-works" element={<HowItWorksView />} />
             <Route path="/metrics" element={<MetricsView />} />
-            <Route path="*" element={<Navigate to="/operations" replace />} />
+            <Route path="*" element={<Navigate to="/how-it-works" replace />} />
           </Route>
         </Routes>
       </HashRouter>

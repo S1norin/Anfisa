@@ -30,20 +30,14 @@ beforeEach(() => {
 });
 
 describe('HowItWorksView (t12)', () => {
-  it('adds the 5th nav item after Operations and mounts #/how-it-works', () => {
+  it('mounts #/how-it-works and is the only top-nav link (t2-1)', () => {
     window.location.hash = '#/how-it-works';
     render(<App />);
     const nav = document.querySelector('nav[aria-label="Primary"]')!;
     const labels = [...nav.querySelectorAll('li')].map(
       (li) => li.textContent,
     );
-    expect(labels).toEqual([
-      'Operations',
-      'Camera Lab',
-      'Schema',
-      'How It Works',
-      'Metrics',
-    ]);
+    expect(labels).toEqual(['How It Works']);
     expect(screen.getByTestId('how-it-works-view')).toBeTruthy();
   });
 

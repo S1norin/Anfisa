@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
 
+/**
+ * t2-1: How It Works is the home screen. The other four routes stay
+ * registered in App.tsx (deep links + their engines keep working) but are
+ * no longer linked from the top navigation.
+ */
 const NAV_ITEMS = [
-  { to: '/operations', label: 'Operations' },
-  { to: '/camera-lab', label: 'Camera Lab' },
-  { to: '/schema', label: 'Schema' },
   { to: '/how-it-works', label: 'How It Works' },
-  { to: '/metrics', label: 'Metrics' },
 ] as const;
 
 export function AppLayout() {
