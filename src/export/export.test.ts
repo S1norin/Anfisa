@@ -191,6 +191,28 @@ describe('run record JSON (AC-10)', () => {
     }
   });
 
+  it('t5-export: JSON embeds the full RunMetrics — values equal the source fields', () => {
+    const record = baselineRun().record();
+    const env = JSON.parse(runRecordToJson(record));
+    // The embedded metrics object is deep-equal to the RunMetrics the
+    // record was built with — one object feeds UI, CSV, and JSON.
+    expect(env.record.metrics).toEqual(record.metrics);
+    // Spot-check every report metric the report contract names.
+    const m = env.record.metrics;
+    expect(m.completeReadRate).toBe(record.metrics.completeReadRate);
+    expect(m.barcodeRecall).toBe(record.metrics.barcodeRecall);
+    expect(m.barcodePrecision).toBe(record.metrics.barcodePrecision);
+    expect(m.falseDecodes).toBe(record.metrics.falseDecodes);
+    expect(m.misassociations).toBe(record.metrics.misassociations);
+    expect(m.totalObservations).toBe(record.metrics.totalObservations);
+    expect(m.uniqueObservedInstances).toBe(record.metrics.uniqueObservedInstances);
+    expect(m.observationsCollapsed).toBe(record.metrics.observationsCollapsed);
+    expect(m.duplicateRate).toBe(record.metrics.duplicateRate);
+    expect(m.latency.entryToResultMs).toEqual(record.metrics.latency.entryToResultMs);
+    expect(m.latency.exitToResultMs).toEqual(record.metrics.latency.exitToResultMs);
+    expect(m.latency.captureToDecodeMs).toEqual(record.metrics.latency.captureToDecodeMs);
+  });
+
   function baselineCfg(): ReturnType<typeof recommendedSixViewConfig> {
     const cfg = recommendedSixViewConfig();
     cfg.seed = 2026;

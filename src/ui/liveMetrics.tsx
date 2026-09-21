@@ -5,7 +5,8 @@
  *
  * Shows: evaluated/spawned counts, complete-read rate, recall, precision,
  * no-read parcels, false decodes, misassociations, observations,
- * dropped frames (buffer-bound trims), and P95 exit→result latency.
+ * duplicate rate, dropped frames (buffer-bound trims), and separate
+ * entry→result / exit→result latency blocks.
  */
 
 import type { RunMetrics } from '../metrics/metrics';
@@ -65,8 +66,18 @@ export function LiveMetrics({ metrics, spawned, noReads, droppedFrames }: Props)
           <dd data-testid="metrics-observations">{metrics.totalObservations}</dd>
         </div>
         <div>
+          <dt>Duplicate rate</dt>
+          <dd data-testid="metrics-duplicate-rate">{pct(metrics.duplicateRate)}</dd>
+        </div>
+        <div>
           <dt>Dropped frames</dt>
           <dd data-testid="metrics-dropped-frames">{droppedFrames}</dd>
+        </div>
+        <div>
+          <dt>Entry → result P50 / P95</dt>
+          <dd data-testid="metrics-entry-result-p95">
+            {Math.round(latency.entryToResultMs.p50)} / {Math.round(latency.entryToResultMs.p95)} ms
+          </dd>
         </div>
         <div>
           <dt>Exit → result P50 / P95</dt>

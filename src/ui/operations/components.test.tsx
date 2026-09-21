@@ -205,6 +205,9 @@ describe('LiveMetrics', () => {
     expect(screen.getByTestId('metrics-recall')).toHaveTextContent('75.0%');
     expect(screen.getByTestId('metrics-no-reads')).toHaveTextContent('1');
     expect(screen.getByTestId('metrics-dropped-frames')).toHaveTextContent('12');
-    expect(screen.getByTestId('metrics-exit-result-p95')).toHaveTextContent('260');
+    // t5-export: separate labelled latency blocks + duplicate rate.
+    expect(screen.getByTestId('metrics-entry-result-p95')).toHaveTextContent('3700 / 3800');
+    expect(screen.getByTestId('metrics-exit-result-p95')).toHaveTextContent('250 / 260');
+    expect(screen.getByTestId('metrics-duplicate-rate')).toHaveTextContent('66.7%');
   });
 });

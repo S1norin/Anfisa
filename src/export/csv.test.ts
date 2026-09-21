@@ -70,6 +70,7 @@ describe('metricsToCsv (AC-10)', () => {
     expect(rows['counts|decodedInstances']).toBe(String(m.decodedInstances));
     expect(rows['counts|falseDecodes']).toBe('0');
     expect(rows['counts|misassociations']).toBe('0');
+    expect(rows['rates|duplicateRate']).toBe(String(m.duplicateRate));
 
     for (const stage of [
       'captureToDecodeMs',
@@ -97,6 +98,26 @@ describe('metricsToCsv (AC-10)', () => {
     expect(metricsToCsv(baselineRun().record().metrics)).toBe(
       metricsToCsv(baselineRun().record().metrics),
     );
+  });
+
+  it('t5-export: every report metric row equals its RunMetrics field (single source)', () => {
+    const m = baselineRun().record().metrics;
+    const rows = parseCsv(metricsToCsv(m));
+    expect(rows['rates|completeReadRate']).toBe(String(m.completeReadRate));
+    expect(rows['rates|barcodeRecall']).toBe(String(m.barcodeRecall));
+    expect(rows['rates|barcodePrecision']).toBe(String(m.barcodePrecision));
+    expect(rows['rates|duplicateRate']).toBe(String(m.duplicateRate));
+    expect(rows['counts|falseDecodes']).toBe(String(m.falseDecodes));
+    expect(rows['counts|misassociations']).toBe(String(m.misassociations));
+    expect(rows['counts|totalObservations']).toBe(String(m.totalObservations));
+    expect(rows['counts|uniqueObservedInstances']).toBe(String(m.uniqueObservedInstances));
+    expect(rows['counts|observationsCollapsed']).toBe(String(m.observationsCollapsed));
+    expect(rows['latency|entryToResultMsP50']).toBe(String(m.latency.entryToResultMs.p50));
+    expect(rows['latency|entryToResultMsP95']).toBe(String(m.latency.entryToResultMs.p95));
+    expect(rows['latency|exitToResultMsP50']).toBe(String(m.latency.exitToResultMs.p50));
+    expect(rows['latency|exitToResultMsP95']).toBe(String(m.latency.exitToResultMs.p95));
+    expect(rows['latency|captureToDecodeMsP50']).toBe(String(m.latency.captureToDecodeMs.p50));
+    expect(rows['latency|captureToDecodeMsP95']).toBe(String(m.latency.captureToDecodeMs.p95));
   });
 
   it('line-scan observation rows are stable; area rows keep the legacy layout (t7)', () => {

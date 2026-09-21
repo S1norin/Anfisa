@@ -33,6 +33,7 @@ export function metricsToCsv(
   lines.push(row('rates', 'completeReadRate', metrics.completeReadRate));
   lines.push(row('rates', 'barcodeRecall', metrics.barcodeRecall));
   lines.push(row('rates', 'barcodePrecision', metrics.barcodePrecision));
+  lines.push(row('rates', 'duplicateRate', metrics.duplicateRate));
 
   // Counts.
   lines.push(row('counts', 'evaluatedParcels', metrics.evaluatedParcels));
