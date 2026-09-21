@@ -282,6 +282,7 @@ describe('run record (MET-008)', () => {
     const record = buildRunRecord({
       runId: 'run-test',
       seed: 2026,
+      processingMode: 'GEOMETRY_MODEL',
       config: recommendedSixViewConfig(),
       simTimeMs: 42000,
       encoderMm: 42000,
@@ -328,6 +329,7 @@ describe('run record (MET-008)', () => {
     const record = buildRunRecord({
       runId: 'run-x',
       seed: 1,
+      processingMode: 'GEOMETRY_MODEL',
       config: recommendedSixViewConfig(),
       simTimeMs: 0,
       encoderMm: 0,

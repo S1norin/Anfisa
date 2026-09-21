@@ -12,14 +12,18 @@
 import { useState } from 'react';
 import type { ParcelState } from '../../domain/types';
 import {
+  applySensorRoi,
   pixelDecodeFrame,
   type PixelDecodeResult,
   type PixelFrame,
+  type SensorRoi,
 } from '../../pipeline/pixelDecoder';
 import type { LabReport } from './labReport';
 
 interface PixelProbeHandle {
-  renderFullResFrame: (cameraId: string) => PixelFrame | null;
+  renderFullResFrame: (cameraId: string) =>
+    | { frame: PixelFrame; roi: SensorRoi | undefined }
+    | null;
 }
 
 declare global {
@@ -83,21 +87,25 @@ export function DecoderComparison({
       setError('Pixel probe unavailable (3D canvas not mounted).');
       return;
     }
-    const frame = probe.renderFullResFrame(cameraId);
-    if (!frame) {
+    const probed = probe.renderFullResFrame(cameraId);
+    if (!probed) {
       setError('Frame render failed (unknown camera).');
       return;
     }
-    const cands = labels
+    const allCands = labels
       .filter((l) => l.projectedCornersPx.length === 4)
       .map((l) => ({
         labelInstanceId: l.labelInstanceId,
         quadPx: l.projectedCornersPx as [number, number][],
       }));
-    if (cands.length === 0) {
+    if (allCands.length === 0) {
       setError('No in-frame label for this parcel from this camera (all labels out of FOV).');
       return;
     }
+    // Explicit ROI/mask stage (t4-pixel): crop the frame to the rig's
+    // sensor ROI before decoding; excluded labels surface as
+    // PIXEL:OUT_OF_FRAME instead of silently missing.
+    const { frame, candidates: cands } = applySensorRoi(probed.frame, probed.roi, allCands);
     setBusy(true);
     // Defer: let the button paint, then do the (GPU-syncing + decode) work.
     queueMicrotask(() => {
@@ -129,6 +137,10 @@ export function DecoderComparison({
         Synthetic pixel experiment: renders the scene from this camera at
         full sensor resolution and decodes the bwip-js label textures from
         raw pixels. Not a real-optics validation; off the capture path.
+      </p>
+      <p className="dc-modes" data-testid="dc-modes">
+        Geometry verdicts: <code>GEOMETRY_MODEL</code> · Pixel verdicts:{' '}
+        <code>PIXEL_DECODER</code>
       </p>
       <div className="dc-actions">
         <button

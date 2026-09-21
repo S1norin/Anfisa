@@ -117,6 +117,7 @@ export class ProcessRun {
       simTimeMs: e.simTimeMs,
       encoderMm: s.encoderMm,
       candidateParcelIds: e.candidateParcelIds,
+      processingMode: 'GEOMETRY_MODEL',
     });
     if (!rig) return;
 
@@ -162,6 +163,7 @@ export class ProcessRun {
       simTimeMs: e.simTimeMs,
       encoderMm: s.encoderMm,
       candidateParcelIds: [e.parcelId],
+      processingMode: 'GEOMETRY_MODEL',
     });
     if (!rig) return;
 
@@ -225,6 +227,9 @@ export class ProcessRun {
     return buildRunRecord({
       runId: s.runId,
       seed: s.config.seed,
+      // Headless runs always run the analytic geometry model; the pixel
+      // path (PIXEL_DECODER) is a separate on-demand experiment (t4-labeling).
+      processingMode: 'GEOMETRY_MODEL',
       config: s.config,
       simTimeMs: s.simTimeMs,
       encoderMm: s.encoderMm,

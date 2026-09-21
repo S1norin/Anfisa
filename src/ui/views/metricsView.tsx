@@ -9,6 +9,11 @@ export function MetricsView() {
       <p data-testid="metrics-placeholder">
         Run summary, breakdowns, and exports land here in issues #10/#15/#16.
       </p>
+      <p data-testid="metrics-mode">
+        Processing mode: run records and captures use <code>GEOMETRY_MODEL</code>;
+        the on-demand pixel probe uses <code>PIXEL_DECODER</code> (not part of the
+        capture path).
+      </p>
     </div>
   );
 }

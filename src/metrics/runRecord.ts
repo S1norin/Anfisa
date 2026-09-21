@@ -12,6 +12,7 @@ import type {
   MaterialPreset,
   ParcelResult,
   ParcelSpec,
+  ProcessingMode,
   SimEvent,
 } from '../domain/types';
 import type { SimConfig } from '../domain/config';
@@ -24,6 +25,8 @@ export interface RunFrameMeta {
   simTimeMs: number;
   encoderMm: number;
   candidateParcelIds: string[];
+  /** Processing mode that produced this frame's observations (t4-labeling). */
+  processingMode?: ProcessingMode;
 }
 
 /** One label observation from one frame (audit-level detail). */
@@ -77,6 +80,8 @@ export interface RunRecord {
   version: 1;
   runId: string;
   seed: number;
+  /** Processing mode the run used (GEOMETRY_MODEL | PIXEL_DECODER). */
+  processingMode: ProcessingMode;
   config: SimConfig;
   simTimeMs: number;
   encoderMm: number;
@@ -99,6 +104,8 @@ export interface RunRecord {
 export interface RunRecordInput {
   runId: string;
   seed: number;
+  /** Processing mode the run used (t4-labeling). */
+  processingMode: ProcessingMode;
   config: SimConfig;
   simTimeMs: number;
   encoderMm: number;
@@ -132,6 +139,7 @@ export function buildRunRecord(input: RunRecordInput): RunRecord {
       version: 1,
       runId: input.runId,
       seed: input.seed,
+      processingMode: input.processingMode,
       config: input.config,
       simTimeMs: input.simTimeMs,
       encoderMm: input.encoderMm,

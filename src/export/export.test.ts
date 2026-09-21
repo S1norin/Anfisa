@@ -184,6 +184,11 @@ describe('run record JSON (AC-10)', () => {
       expect(typeof f.encoderMm).toBe('number');
       expect(Array.isArray(f.candidateParcelIds)).toBe(true);
     }
+    // Processing mode (t4-labeling): run level + every frame.
+    expect(env.record.processingMode).toBe('GEOMETRY_MODEL');
+    for (const f of env.record.frames) {
+      expect(f.processingMode).toBe('GEOMETRY_MODEL');
+    }
   });
 
   function baselineCfg(): ReturnType<typeof recommendedSixViewConfig> {

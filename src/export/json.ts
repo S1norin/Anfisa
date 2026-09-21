@@ -166,6 +166,7 @@ export function framesFromEvents(
         simTimeMs: ev.simTimeMs,
         encoderMm: Math.round(posMm * 100) / 100,
         candidateParcelIds: ev.candidateParcelIds,
+        processingMode: 'GEOMETRY_MODEL',
       });
     }
   }
@@ -204,6 +205,8 @@ export function buildLiveRunRecord(store: SimStore, metrics: RunMetrics): RunRec
   return buildRunRecord({
     runId: s.runId,
     seed: s.config.seed,
+    // Live captures always run the analytic geometry model (t4-labeling).
+    processingMode: 'GEOMETRY_MODEL',
     config: s.config,
     simTimeMs: s.simTimeMs,
     encoderMm: s.encoderMm,
