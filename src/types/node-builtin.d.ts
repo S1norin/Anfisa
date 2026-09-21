@@ -9,6 +9,13 @@ declare module 'node:fs' {
 declare module 'node:path' {
   export function join(...parts: string[]): string;
 }
+declare module 'node:crypto' {
+  interface Hash {
+    update(data: string | Uint8Array): Hash;
+    digest(encoding: 'hex'): string;
+  }
+  export function createHash(algorithm: string): Hash;
+}
 declare const process: {
   cwd(): string;
   env: Record<string, string | undefined>;

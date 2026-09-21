@@ -6,3 +6,4 @@ coverage/
 npm-debug.log*
 .vite/
 HANDOFF.md
+scripts/__pycache__/
