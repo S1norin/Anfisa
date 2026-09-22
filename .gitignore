@@ -7,3 +7,4 @@ npm-debug.log*
 .vite/
 HANDOFF.md
 scripts/__pycache__/
+__pycache__/
