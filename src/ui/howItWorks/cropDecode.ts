@@ -31,7 +31,7 @@ export interface DecodeOutcome {
 
 /** Quad covering the whole crop, inset by `marginPx` (the rectified crop
  *  IS the symbol, so a full-frame candidate is the honest search). */
-function fullCropQuad(
+export function fullCropQuad(
   widthPx: number,
   heightPx: number,
   labelInstanceId: string,

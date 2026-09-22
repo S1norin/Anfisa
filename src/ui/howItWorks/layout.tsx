@@ -64,9 +64,19 @@ import {
   ObservationTravelHighlight,
 } from './step7Association';
 import { Step8Result } from './step8Result';
+import { createHttpLiveProcessingService } from '../../live-processing/httpService';
+import { LiveView } from './live/liveView';
 
 export type HiwMode = 'guided' | 'live';
 export type HiwViewPreset = 'orbit' | 'top' | 'side' | 'sensor';
+
+/**
+ * The ONE browser service implementation for the whole page (stable
+ * identity — the client binds to it once). The Python service (t7-2)
+ * answers on 127.0.0.1:8790; if it is down the live module shows the
+ * 'Live Processing unavailable' state.
+ */
+const LIVE_SERVICE = createHttpLiveProcessingService();
 
 /** Fixed-view look targets (metres, station coordinates). */
 const TOP_CAMERA_POS: [number, number, number] = [0, 3.2, 0.8];
@@ -515,14 +525,11 @@ export function HiwShell({
       </div>
 
       {mode === 'live' ? (
-        <div
-          className="hiw-live-unavailable"
-          data-testid="live-unavailable"
-          role="status"
-        >
-          Live Processing is not available yet. Use Guided Replay to follow the
-          story.
-        </div>
+        <LiveView
+          service={LIVE_SERVICE}
+          parcelId={manifest.parcel.parcelId}
+          labelPayload={manifest.parcel.labels[0]?.payload}
+        />
       ) : (
         <>
           <div className="hiw-panels">
