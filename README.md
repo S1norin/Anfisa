@@ -35,7 +35,7 @@ npm run dev        # http://localhost:5173  (Vite; the run auto-starts on load)
 Other commands:
 
 ```bash
-npm test           # vitest unit + deterministic e2e suites (595 tests)
+npm test           # vitest unit + deterministic e2e suites (772 tests)
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint
 npm run build      # typecheck + production bundle
@@ -49,11 +49,77 @@ The dev server uses a hash router, so deep links look like
 
 ## Views
 
-The top nav has five views. The domain run (config, seed, sim clock) is a
-single shared store, so switching views does **not** reset the run — the same
-parcels keep moving.
+The top nav has a single view — **How it works** (the index route; `#/`
+redirects to `#/how-it-works`). Four earlier screens remain registered as
+direct routes so deep links and their engines keep working, but they are no
+longer in the nav: `#/operations`, `#/camera-lab`, `#/schema`, `#/metrics`.
+The domain run (config, seed, sim clock) is a single shared store, so
+switching routes does **not** reset the run — the same parcels keep moving.
 
-### Operations (default)
+### How it works (default)
+
+The teaching surface. A three-panel shell — **3D station** (left), **image /
+story panel** (right), **storyboard timeline** (bottom) — walks one parcel
+through eight numbered steps on a single playback clock (play/pause, step
+fwd/back, restart, scrub, speed):
+
+1. parcel entry (photoeye + encoder ruler arming),
+2. line-scan capture (top/bottom cross-belt rows build the 2D strip),
+3. line-scan preparation (six manifest stage images),
+4. line-scan decode (browser ZXing of the manifest rectified crop),
+5. side-camera capture (six area frames, viewing-angle switcher),
+6. side-image preparation (perspective-corrected crop + pixel decode),
+7. association (existing `src/pipeline/association.ts` rules over the
+   pixel-decoded observations),
+8. combine/dedup + final result card.
+
+Story data is deterministic: two offline fixtures (success, no-read) generated
+by the Python/OpenCV asset generator into `public/hiw/assets/` — the UI never
+fabricates a value; every displayed read is a pixel decode of a
+manifest-referenced crop, or an explicit no-read reason. A fixture switcher
+selects success vs no-read; a mode switch selects **Guided Replay** or
+**Live Processing** (below). Reduced motion, non-WebGL fallback, keyboard
+controls, and narrow screens are all supported.
+
+#### Live Processing mode
+
+A separate module (not a second storyboard): a camera selector (top/bottom
+line scan + six side cameras, all synthetic sources carrying real Code 128
+pixels), a six-tile live grid (raw, masked/ROI, grayscale/contrast, edge map,
+candidate, decode) where every tile shares the newest captureId + encoder
+span of the selected camera, and a compact event strip
+(capture → preprocessing → candidate → decode → association → final). Pause
+freezes all tiles; lag and dropped preview frames are displayed. All image
+work is done server-side by the Python service (below); the only browser
+compute is the decode tile (existing ZXing path). With the service not
+running the module shows **Live Processing unavailable** and Guided Replay
+stays usable.
+
+```bash
+python3 services/live_processing/app.py --port 8790
+```
+
+The service is stdlib-only (no framework). `POST /process` receives one
+frame/strip (base64 PNG) and returns the stage chain computed from that
+exact input — it never serves a precomputed replay image. `GET /health`
+reports readiness; responses carry permissive CORS headers for the local
+browser. Per-camera throttling (`--min-update-interval-ms`, default 250) is
+flow control, not an outage — the UI keeps its state on HTTP 429.
+
+#### Regenerating the guided-replay assets
+
+```bash
+python3 -m pip install -r requirements-hiw.txt   # opencv + numpy only
+python3 scripts/gen_hiw_assets.py                # -> public/hiw/assets/
+```
+
+The generator is deterministic: two consecutive runs produce
+byte-identical manifests and stage images. Candidate detection is an explicit
+step inside the script; geometry-derived candidates are labeled
+`source: geometry` (the UI renders them as *illustrative candidate
+location*), pixel-derived ones `source: pixels`.
+
+### Operations (retired from nav)
 
 - Central 3D station: orbit the camera, watch parcels travel the belt.
   Click a parcel to select it (click empty space to clear; it otherwise
@@ -99,18 +165,6 @@ Run-level metrics computed from the same inputs as the headless record:
 read rate, no-read count, per-reason breakdown, association quality, and
 capture-to-decode latency. These are **synthetic ground-truth regression
 metrics**, not optical performance numbers.
-
-### How It Works
-
-The teaching view: an 11-stage process step rail (created → entry/tracking →
-reader triggering → acquisition → preprocessing → quality gating → decode →
-association → dedup/aggregation → exit/finalization → PLC ACK/sort) with
-keyboard prev/next, a lightweight HTML/CSS flow diagram, and live evidence
-cards that map a selected parcel's real event stream onto the stages
-(complete / in progress / pending / failed, with counts and reasons).
-The parcel selector follows the newest parcel by default. A callout reminds
-reviewers that decode accuracy is **analytic** (geometric projection +
-deterministic quality model), not a GPU image readout.
 
 ---
 
@@ -189,26 +243,33 @@ BOTTOM rigs into `LINE_SCAN` with the line block (`sensorWidthMm`,
 
 ## Five-minute walkthrough
 
-1. Open **Schema** and explain the belt, parcel axes, the eight readers
-   (six side area cameras at 60° plus the top/bottom line scanners), the
-   100 mm bottom opening, the upstream centering guides, and the sorter
+1. Land on **How it works** and play the 8-step guided replay: entry
+   photoeye → line-scan strip build → prep stages → pixel decode → six side
+   frames → perspective crop → association → final card. Switch the fixture
+   to **no-read** and show the explicit no-read reason (no fabricated value).
+2. Switch to **Live Processing** (start `python3
+   services/live_processing/app.py --port 8790` first): step through the
+   eight cameras, point out that all six tiles share one captureId, and show
+   pause freezing every tile at once.
+3. Open **Schema** (`#/schema`) and explain the belt, parcel axes, the eight
+   readers (six side area cameras at 60° plus the top/bottom line scanners),
+   the 100 mm bottom opening, the upstream centering guides, and the sorter
    distance.
-2. Switch to **Operations**. Select a parcel and follow its ID through
-   photoeye entry, camera frames, observations, aggregation, and ACK.
-3. Open the parcel result and point out multiple physical labels, including
+4. Open **Operations** (`#/operations`). Select a parcel and follow its ID
+   through photoeye entry, camera frames, observations, aggregation, and ACK;
+   open the parcel result and point out multiple physical labels, including
    two instances that carry the same payload.
-4. Open **Camera Lab** on a side camera. Move it or change the focal length
-   and show the live change in FOV, working distance, incidence angle, PPM,
-   and the feed.
-5. Raise exposure or add glare until a label becomes unreadable. Show the
-   explicit no-read reason and the metric change.
+5. Open **Camera Lab** (`#/camera-lab`) on a side camera. Move it or change
+   the focal length and show the live change in FOV, working distance,
+   incidence angle, PPM, and the feed. Raise exposure or add glare until a
+   label becomes unreadable and show the explicit no-read reason.
 6. Switch the **Bottom gap transfer** preset to **Side-grip transfer** and
-   show why the full bottom face becomes observable.
-7. Trigger a **camera fault** and show the fail-safe parcel status (no
-   fabricated successful read).
-8. Finish on **Metrics**, state that the numbers are synthetic ground-truth
-   regression metrics, and note that a real PoC is required for optical
-   validation.
+   show why the full bottom face becomes observable; trigger a **camera
+   fault** and show the fail-safe parcel status (no fabricated successful
+   read).
+7. Finish on **Metrics** (`#/metrics`), state that the numbers are synthetic
+   ground-truth regression metrics, and note that a real PoC is required for
+   optical validation.
 
 ### Available presets (Camera Lab → Preset)
 
