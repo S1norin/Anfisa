@@ -48,6 +48,11 @@ export interface LiveDecode {
   decoded: boolean;
   /** Only when decoded === true. */
   decodedPayload?: string;
+  /**
+   * True when the service found a candidate and the browser must still
+   * decode the rectified crop — the in-between state before ZXing runs.
+   */
+  pending?: boolean;
   /** Reason codes when decoded === false (e.g. 'QUALITY:GLARE'). */
   reasons: string[];
   /** 0 when not decoded. */
@@ -150,6 +155,8 @@ export function isLiveProcessingResult(value: unknown): value is LiveProcessingR
     typeof r.decode === 'object' &&
     r.decode !== null &&
     typeof (r.decode as LiveDecode).decoded === 'boolean' &&
+    ((r.decode as LiveDecode).pending === undefined ||
+      typeof (r.decode as LiveDecode).pending === 'boolean') &&
     Array.isArray((r.decode as LiveDecode).reasons) &&
     typeof r.processingMs === 'number'
   );
